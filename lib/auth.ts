@@ -1,4 +1,6 @@
+import { useAuth } from "@/context/AuthContext"
 import api from "./axios"
+import { BackendUser } from "@/types"
 
 interface AuthResponse {
   accessToken: string
@@ -51,6 +53,10 @@ export async function login(email: string, password: string): Promise<{ email: s
 
   const decoded = decodeToken(data.accessToken)
   const extractedEmail = decoded?.sub || email
+
+  //const { setUser } = useAuth();
+  //const currentUser = await getCurrentUserDetails();
+  //setUser(currentUser);
 
   return {
     email: extractedEmail,
@@ -116,7 +122,7 @@ export function getCurrentUser(): { email: string; role: string; sub: string } |
   }
 }
 
-export async function getCurrentUserDetails(): Promise<User> {
+export async function getCurrentUserDetails(): Promise<BackendUser> {
   try {
     const { data } = await api.get("/user/me")
     return data

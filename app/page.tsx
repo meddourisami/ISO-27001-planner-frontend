@@ -12,17 +12,17 @@ export default function Home() {
   const router = useRouter()
 
   useEffect(() => {
-    const token = getAccessToken()
-    
+    const token = getAccessToken();
+
     if (!token) {
-      router.push("/login")
+      router.push('/login');
     }
-  }, [router])
+  }, [router]);
 
   return (
     <main className="min-h-screen bg-background">
       <Providers>
-        <Dashboard />
+          <Dashboard />
       </Providers>
     </main>
   )

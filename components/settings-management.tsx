@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -21,43 +21,40 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Building, Download, FileUp, Mail, Plus, Save, Settings, Trash2, Upload, UserCog, Users } from "lucide-react"
+import { BackendUser, User } from "@/types"
+import { deleteMember, editMember, fetchCompanyDetails, fetchCompanyUsers, fetchRoles, listMembers, registerMember, updateCompanyDetails } from "../utils/api"
+import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/context/AuthContext";
+
 
 export default function SettingsManagement() {
+  type EditUserType = {
+    id: string;
+    fullName: string;
+    email: string;
+    role: string;
+    status: "active" | "inactive";
+    targetEmail?: string; // optional field for original email
+  };
+  const { toast } = useToast()
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("general")
-  const [organizationName, setOrganizationName] = useState("Acme Corporation")
-  const [ismsScope, setIsmsScope] = useState(
-    "All information systems and processes supporting core business operations including customer data management, financial systems, and internal communications.",
-  )
+  const [organizationName, setOrganizationName] = useState("");
+  const [ismsScope, setIsmsScope] = useState("");
   const [emailNotifications, setEmailNotifications] = useState(true)
   const [auditLogRetention, setAuditLogRetention] = useState("90")
   const [theme, setTheme] = useState("system")
   const [userDialogOpen, setUserDialogOpen] = useState(false)
   const [roleDialogOpen, setRoleDialogOpen] = useState(false)
+  const [editUser, setEditUser] = useState<EditUserType | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [backupInProgress, setBackupInProgress] = useState(false)
   const [restoreInProgress, setRestoreInProgress] = useState(false)
 
-  // Mock users data
-  const [users, setUsers] = useState([
-    { id: "1", name: "John Smith", email: "john@example.com", role: "Administrator", status: "active" },
-    { id: "2", name: "Sarah Johnson", email: "sarah@example.com", role: "Security Officer", status: "active" },
-    { id: "3", name: "Michael Chen", email: "michael@example.com", role: "Auditor", status: "active" },
-    { id: "4", name: "Lisa Wong", email: "lisa@example.com", role: "Risk Manager", status: "inactive" },
-    { id: "5", name: "David Miller", email: "david@example.com", role: "Compliance Manager", status: "active" },
-  ])
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Mock roles data
-  const [roles, setRoles] = useState([
-    {
-      id: "1",
-      name: "Administrator",
-      description: "Full system access",
-      permissions: ["read", "write", "delete", "admin"],
-    },
-    { id: "2", name: "Security Officer", description: "Manages security controls", permissions: ["read", "write"] },
-    { id: "3", name: "Auditor", description: "Conducts audits", permissions: ["read"] },
-    { id: "4", name: "Risk Manager", description: "Manages risks", permissions: ["read", "write"] },
-    { id: "5", name: "Compliance Manager", description: "Manages compliance", permissions: ["read", "write"] },
-  ])
+  const [roles, setRoles] = useState<string[]>([]);
 
   // New user form state
   const [newUser, setNewUser] = useState({
@@ -74,9 +71,67 @@ export default function SettingsManagement() {
     permissions: [] as string[],
   })
 
-  const handleSaveGeneralSettings = () => {
-    // In a real app, this would save to backend
-    alert("General settings saved successfully")
+  const showRoleManagement = false;
+
+  useEffect(() => {
+    const loadInitialSettings = async () => {
+      try {
+        const company = await fetchCompanyDetails()
+        setOrganizationName(company.name || "")
+        setIsmsScope(company.ismsScope || "")
+      
+        const response = await fetchCompanyUsers()
+        const enrichedUsers: User[] = response.content.map((user: BackendUser) => ({
+          ...user,
+          status: "active", // or add conditional logic later
+        }))
+        setUsers(enrichedUsers)
+      } catch (error) {
+        console.error("Error loading company settings", error)
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadInitialSettings()
+  }, [])
+
+  useEffect(() => {
+    const loadRoles = async () => {
+      try {
+        const rolesData = await fetchRoles();
+        setRoles(rolesData);
+      } catch (error) {
+        console.error('Failed to fetch roles:', error);
+      }
+    };
+
+    loadRoles();
+  }, []);
+
+  const handleSaveGeneralSettings = async () => {
+    if (!user) {
+      toast({
+        title: "saving new settings",
+        description: "user not authenticated",
+        variant: "destructive"
+      })
+      return;
+    }
+    try {
+      await updateCompanyDetails({ companyId: user.companyId, name: organizationName, ismsScope: ismsScope })
+      toast({
+        title: "Success",
+        description: "General settings saved successfully.",
+      });
+    } catch (error) {
+      console.error("Failed to update company details", error)
+      toast({
+        title: "Update Failed",
+        description:  error?.response?.data?.message || error?.message ||"Failed to update company details.",
+        variant: "destructive",
+      });
+    }
   }
 
   const handleSaveNotificationSettings = () => {
@@ -89,39 +144,97 @@ export default function SettingsManagement() {
     alert("System settings saved successfully")
   }
 
-  const handleAddUser = () => {
-    // Validate form
+  const handleAddUser = async () => {
+    // validation logic
     if (!newUser.name || !newUser.email || !newUser.role) {
-      alert("Please fill in all required fields")
-      return
+      toast({
+        title: "Missing Fields",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
     }
 
-    // Add new user
-    setUsers([
-      ...users,
-      {
-        id: (users.length + 1).toString(),
-        ...newUser,
-      },
-    ])
-
-    // Reset form and close dialog
-    setNewUser({
-      name: "",
-      email: "",
-      role: "",
-      status: "active",
-    })
-    setUserDialogOpen(false)
-  }
-
-  const handleDeleteUser = (userId: string) => {
-    if (confirm("Are you sure you want to delete this user?")) {
-      setUsers(users.filter((user) => user.id !== userId))
+    try {
+      await registerMember(newUser.email, 'DefaultPassword123!', newUser.role);
+      const updatedUsers = await listMembers();
+      setUsers(updatedUsers);
+      // ...reset form and close dialog
+      setNewUser({
+        name: '',
+        email: '',
+        role: '',
+        status: 'active',
+      });
+      setUserDialogOpen(false);
+      toast({
+        title: "User Added",
+        description: `${newUser.email} was added successfully.`,
+      });
+    } catch (error) {
+      console.error('Error adding user:', error);
+      toast({
+        title: "Add Failed",
+        description: "Failed to add user. Please try again.",
+        variant: "destructive",
+      });
     }
-  }
+  };
 
-  const handleAddRole = () => {
+  const handleDeleteUser = async (userEmail: string) => {
+    if (confirm('Are you sure you want to delete this user?')) {
+      try {
+        await deleteMember(userEmail)
+        setUsers((prevUsers) => prevUsers.filter((user) => user.email !== userEmail))
+
+        toast({
+          title: "User Deleted",
+          description: `User with email ${userEmail} was removed.`,
+        })
+        const updatedUsers = await listMembers();
+        setUsers(updatedUsers);
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        toast({
+          title: "Delete Failed",
+          description: "Could not delete the user.",
+          variant: "destructive",
+        })
+      }
+    }
+  };
+
+  const handleUpdateUser = async () => {
+    if (!editUser) return;
+
+    try {
+      const targetEmail = editUser.targetEmail || editUser.email;
+
+      await editMember(targetEmail, editUser.email, editUser.fullName, editUser.role);
+      const updated = await listMembers();
+      setUsers(
+        updated.map(u => ({
+          ...u,
+          status: (u.status as any) || "active"
+        }))
+      );  
+      toast({
+        title: "User Updated",
+        description: `${editUser.email} was updated successfully.`,
+      });
+      setIsEditDialogOpen(false);
+      setEditUser(null);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      toast({
+        title: "Update Failed",
+        description: "Could not save changes. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  /*const handleAddRole = () => {
     // Validate form
     if (!newRole.name || !newRole.description || newRole.permissions.length === 0) {
       alert("Please fill in all required fields")
@@ -150,7 +263,7 @@ export default function SettingsManagement() {
     if (confirm("Are you sure you want to delete this role?")) {
       setRoles(roles.filter((role) => role.id !== roleId))
     }
-  }
+  }*/
 
   const handleBackupSystem = () => {
     setBackupInProgress(true)
@@ -186,6 +299,9 @@ export default function SettingsManagement() {
     }
   }
 
+  if (isLoading) {
+    return <div>Loading...</div>; // or your custom loader component
+  }
   return (
     <div className="space-y-4">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
@@ -279,8 +395,8 @@ export default function SettingsManagement() {
                           </SelectTrigger>
                           <SelectContent>
                             {roles.map((role) => (
-                              <SelectItem key={role.id} value={role.name}>
-                                {role.name}
+                              <SelectItem key={role} value={role}>
+                                {role}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -312,6 +428,10 @@ export default function SettingsManagement() {
                 </Dialog>
               </div>
             </CardHeader>
+            <div
+              className={isEditDialogOpen ? "opacity-30 pointer-events-none transition-opacity duration-300" : "transition-opacity duration-300"}
+              inert={isEditDialogOpen ? true : undefined}
+            >
             <CardContent>
               <Table>
                 <TableHeader>
@@ -324,9 +444,9 @@ export default function SettingsManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => (
+                  {Array.isArray(users) && users.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
+                      <TableCell className="font-medium">{user.fullName}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>{user.role}</TableCell>
                       <TableCell>
@@ -336,14 +456,107 @@ export default function SettingsManagement() {
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
-                          <Button variant="ghost" size="sm">
-                            Edit
-                          </Button>
+                          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                            <Button variant="ghost" size="sm" onClick={(e) => {
+                              setEditUser({
+                                id: user.id.toString(),
+                                fullName: user.fullName,
+                                email: user.email,
+                                role: user.role,
+                                status: user.status,
+                                targetEmail: user.email,
+                              });
+                              e.currentTarget.blur();
+                              setIsEditDialogOpen(true);
+                            }}>
+                              Edit
+                            </Button>
+                            {editUser && (
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Edit User</DialogTitle>
+                                <DialogDescription>Update user details and status</DialogDescription>
+                              </DialogHeader>
+                              <div className="grid gap-4 py-4">
+                                {/* Full Name */}
+                                <div className="space-y-2">
+                                  <Label htmlFor="edit-user-name">Full Name</Label>
+                                  <Input
+                                    id="edit-user-name"
+                                    value={editUser.fullName ?? ""}
+                                    onChange={(e) =>
+                                      setEditUser({ ...editUser, fullName: e.target.value })
+                                    }
+                                  />
+                                </div>
+                                {/* Email */}
+                                <div className="space-y-2">
+                                  <Label htmlFor="edit-user-email">Email</Label>
+                                  <Input
+                                    id="edit-user-email"
+                                    type="email"
+                                    value={editUser.email ?? ""}
+                                    onChange={(e) =>
+                                      setEditUser({ ...editUser, email: e.target.value })
+                                    }
+                                  />
+                                </div>
+                                {/* Role */}
+                                <div className="space-y-2">
+                                  <Label htmlFor="edit-user-role">Role</Label>
+                                  <Select
+                                    value={editUser.role ?? ""}
+                                    onValueChange={(value) =>
+                                      setEditUser({ ...editUser, role: value })
+                                    }
+                                  >
+                                    <SelectTrigger id="edit-user-role">
+                                      <SelectValue placeholder="Select role" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {roles.map((r) => (
+                                        <SelectItem key={r} value={r}>
+                                          {r}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                {/* Status */}
+                                <div className="space-y-2">
+                                  <Label htmlFor="edit-user-status">Status</Label>
+                                  <Select
+                                    value={editUser.status}
+                                    onValueChange={(value) =>
+                                      setEditUser((prev) =>
+                                        prev ? { ...prev, status: value as "active" | "inactive" } : prev
+                                      )
+                                    }
+                                  >
+                                    <SelectTrigger id="edit-user-status">
+                                      <SelectValue placeholder="Select status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="active">Active</SelectItem>
+                                      <SelectItem value="inactive">Inactive</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                              <DialogFooter>
+                                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                                  Cancel
+                                </Button>
+                                <Button onClick={handleUpdateUser}>Save Changes</Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          )}
+                          </Dialog>
                           <Button
                             variant="ghost"
                             size="sm"
                             className="text-destructive"
-                            onClick={() => handleDeleteUser(user.id)}
+                            onClick={() => handleDeleteUser(user.email)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -354,152 +567,155 @@ export default function SettingsManagement() {
                 </TableBody>
               </Table>
             </CardContent>
+            </div>
           </Card>
         </TabsContent>
 
         {/* Roles Tab */}
-        <TabsContent value="roles" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center">
-                    <UserCog className="mr-2 h-5 w-5" />
-                    Role Management
-                  </CardTitle>
-                  <CardDescription>Manage roles and permissions</CardDescription>
-                </div>
-                <Dialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Role
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Add New Role</DialogTitle>
-                      <DialogDescription>Create a new role with specific permissions</DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="role-name">Role Name</Label>
-                        <Input
-                          id="role-name"
-                          value={newRole.name}
-                          onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="role-description">Description</Label>
-                        <Textarea
-                          id="role-description"
-                          value={newRole.description}
-                          onChange={(e) => setNewRole({ ...newRole, description: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Permissions</Label>
-                        <div className="grid grid-cols-2 gap-2 border rounded-md p-3">
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="perm-read"
-                              checked={newRole.permissions.includes("read")}
-                              onChange={() => togglePermission("read")}
-                              className="rounded"
-                            />
-                            <Label htmlFor="perm-read">Read</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="perm-write"
-                              checked={newRole.permissions.includes("write")}
-                              onChange={() => togglePermission("write")}
-                              className="rounded"
-                            />
-                            <Label htmlFor="perm-write">Write</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="perm-delete"
-                              checked={newRole.permissions.includes("delete")}
-                              onChange={() => togglePermission("delete")}
-                              className="rounded"
-                            />
-                            <Label htmlFor="perm-delete">Delete</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="perm-admin"
-                              checked={newRole.permissions.includes("admin")}
-                              onChange={() => togglePermission("admin")}
-                              className="rounded"
-                            />
-                            <Label htmlFor="perm-admin">Admin</Label>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setRoleDialogOpen(false)}>
-                        Cancel
+        {showRoleManagement && (
+          <TabsContent value="roles" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center">
+                      <UserCog className="mr-2 h-5 w-5" />
+                      Role Management
+                    </CardTitle>
+                    <CardDescription>Manage roles and permissions</CardDescription>
+                  </div>
+                  <Dialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Role
                       </Button>
-                      <Button onClick={handleAddRole}>Add Role</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Role Name</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Permissions</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {roles.map((role) => (
-                    <TableRow key={role.id}>
-                      <TableCell className="font-medium">{role.name}</TableCell>
-                      <TableCell>{role.description}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {role.permissions.map((permission) => (
-                            <Badge key={permission} variant="outline">
-                              {permission}
-                            </Badge>
-                          ))}
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Add New Role</DialogTitle>
+                        <DialogDescription>Create a new role with specific permissions</DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="role-name">Role Name</Label>
+                          <Input
+                            id="role-name"
+                            value={newRole.name}
+                            onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
+                          />
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button variant="ghost" size="sm">
-                            Edit
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive"
-                            onClick={() => handleDeleteRole(role.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                        <div className="space-y-2">
+                          <Label htmlFor="role-description">Description</Label>
+                          <Textarea
+                            id="role-description"
+                            value={newRole.description}
+                            onChange={(e) => setNewRole({ ...newRole, description: e.target.value })}
+                          />
                         </div>
-                      </TableCell>
+                        <div className="space-y-2">
+                          <Label>Permissions</Label>
+                          <div className="grid grid-cols-2 gap-2 border rounded-md p-3">
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id="perm-read"
+                                checked={newRole.permissions.includes("read")}
+                                onChange={() => togglePermission("read")}
+                                className="rounded"
+                              />
+                              <Label htmlFor="perm-read">Read</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id="perm-write"
+                                checked={newRole.permissions.includes("write")}
+                                onChange={() => togglePermission("write")}
+                                className="rounded"
+                              />
+                              <Label htmlFor="perm-write">Write</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id="perm-delete"
+                                checked={newRole.permissions.includes("delete")}
+                                onChange={() => togglePermission("delete")}
+                                className="rounded"
+                              />
+                              <Label htmlFor="perm-delete">Delete</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id="perm-admin"
+                                checked={newRole.permissions.includes("admin")}
+                                onChange={() => togglePermission("admin")}
+                                className="rounded"
+                              />
+                              <Label htmlFor="perm-admin">Admin</Label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setRoleDialogOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button onClick={handleAddRole}>Add Role</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Role Name</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Permissions</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
+                  </TableHeader>
+                  <TableBody>
+                    {roles.map((role) => (
+                      <TableRow key={role.id}>
+                        <TableCell className="font-medium">{role.name}</TableCell>
+                        <TableCell>{role.description}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {role.permissions.map((permission) => (
+                              <Badge key={permission} variant="outline">
+                                {permission}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex space-x-2">
+                            <Button variant="ghost" size="sm">
+                              Edit
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive"
+                              onClick={() => handleDeleteRole(role.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {/* Notifications Tab */}
         <TabsContent value="notifications" className="space-y-4">
