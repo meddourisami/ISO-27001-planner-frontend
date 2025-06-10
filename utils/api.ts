@@ -1,4 +1,4 @@
-import { User } from "@/types";
+import { RiskDto, User } from "@/types";
 import api from "../lib/axios";
 
 
@@ -48,3 +48,30 @@ export const fetchRoles = async (): Promise<string[]> => {
   const response = await api.get('/user/roles');
   return response.data;
 };
+
+//risk api endpoints
+
+export async function listRisks(companyId: number): Promise<RiskDto[]> {
+  const { data } = await api.get<RiskDto[]>(`/risks/company/${companyId}`)
+  return data
+}
+
+export async function createRisk(risk: RiskDto): Promise<RiskDto> {
+  const { data } = await api.post<RiskDto>('/risks', risk)
+  return data
+}
+
+export async function updateRiskApi(risk: RiskDto): Promise<RiskDto> {
+  if (!risk.id) throw new Error('Missing risk id')
+  const { data } = await api.put<RiskDto>(`/risks/${risk.id}`, risk)
+  return data
+}
+
+export async function deleteRiskApi(id: string): Promise<void> {
+  await api.delete(`/risks/${id}`)
+}
+
+export async function getRiskMatrix(companyId: number): Promise<Record<string, Record<string, number>>> {
+  const { data } = await api.get<Record<string, Record<string, number>>>(`/risks/matrix/${companyId}`)
+  return data
+}

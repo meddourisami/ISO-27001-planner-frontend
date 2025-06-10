@@ -12,97 +12,90 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useDispatch, useSelector } from "react-redux"
+import { AppDispatch, RootState } from "@/lib/store"
+import { fetchCurrentUser, loginAsync, resendMfaCode, verifyMfaAsync } from "@/lib/features/auth/authSlice"
 
 export default function LoginPage() {
   const router = useRouter()
+  const dispatch = useDispatch<AppDispatch>()
+
+  const { mfaRequired, mfaEmail, user, status } = useSelector((state: RootState) => state.auth)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [showMfa, setShowMfa] = useState(false)
   const [mfaCode, setMfaCode] = useState("")
-  const [mfaEmail, setMfaEmail] = useState("")
   const [resendTimeout, setResendTimeout] = useState(0)
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-
-    try {
-      const result = await login(email, password)
-
-      if (result.requiresMfa) {
-        setMfaEmail(result.email)
-        setShowMfa(true)
-        toast({
-          title: "MFA Required",
-          description: "A verification code was sent to your email.",
-        })
-        startResendTimer()
-      } else {
-        router.push("/")
-        toast({
-          title: "Login Successful",
-          description: "Welcome to the ISMS Planner.",
-        })
-      }
-    } catch (error: any) {
-      toast({
-        title: "Login Failed",
-        description: error?.response?.data?.message || error?.message || "Login failed.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleMfaVerification = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-
-    try {
-      await verifyMfa(mfaEmail, mfaCode.trim())
-      router.push("/")
-      toast({
-        title: "Login Successful",
-        description: "MFA verification completed successfully.",
-      })
-    } catch (error) {
-      toast({
-        title: "Verification Failed",
-        description: "Invalid verification code. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleResendCode = async () => {
-
-    if (resendTimeout > 0) return
-    setIsLoading(true)
-
-    try {
-      await resendMfa(mfaEmail)
-      toast({
-        title: "Code Resent",
-        description: "A new verification code has been sent to your email.",
-      })
-      startResendTimer()
-    } catch (error) {
-      toast({
-        title: "Resend Failed",
-        description: "Unable to resend verification code.",
-        variant: "destructive",
-      })
-    }
-  }
+  const [localMfaEmail, setLocalMfaEmail] = useState<string>("")
 
   const startResendTimer = useCallback(() => {
     setResendTimeout(30) // 30 seconds cooldown before resending code
   }, [])
+
+  useEffect(() => {
+    if (user) router.push("/")
+  }, [user, router])
+  
+
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      const result = await dispatch(loginAsync({ email, password })).unwrap();
+
+      if (result.mfaRequired) {
+        setShowMfa(true);                // Show MFA UI
+        setLocalMfaEmail(result.email);
+        toast({ title: "MFA Required", description: "Check your email." });
+        startResendTimer();
+      } else {
+        await dispatch(fetchCurrentUser());
+        toast({ title: "Login Successful", description: "Welcome!" });
+        router.push("/");
+      }
+    } catch (err: any) {
+      toast({ title: "Login Failed", description: err, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  const handleMfaVerify = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setIsLoading(true);
+  try {
+    await dispatch(verifyMfaAsync({ email: localMfaEmail, code: mfaCode })).unwrap();
+    await dispatch(fetchCurrentUser());
+    toast({ title: "Login Successful", description: "Welcome!" });
+    router.push("/");
+  } catch (err: any) {
+    toast({ title: "MFA Failed", description: err, variant: "destructive" });
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+
+  const handleResendCode = async () => {
+    if (resendTimeout > 0 || !localMfaEmail) return;
+    try {
+      await dispatch(resendMfaCode(localMfaEmail)).unwrap();
+      toast({
+        title: "Code Resent",
+        description: "A new MFA code has been sent.",
+      })
+      startResendTimer()
+    } catch {
+      toast({
+        title: "Resend Failed",
+        description: "Unable to resend MFA code.",
+        variant: "destructive",
+      })
+    }
+  }
 
   useEffect(() => {
     if (resendTimeout <= 0) return
@@ -198,7 +191,7 @@ export default function LoginPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleMfaVerification} className="space-y-4" noValidate>
+              <form onSubmit={handleMfaVerify} className="space-y-4" noValidate>
                 <Label htmlFor="mfa-code">Verification Code</Label>
                 <div className="relative">
                   <KeyRound className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />

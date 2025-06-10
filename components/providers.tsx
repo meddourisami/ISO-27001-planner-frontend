@@ -3,7 +3,6 @@
 import { Provider } from "react-redux"
 import { store } from "@/lib/store"
 import type { ReactNode } from "react"
-import { AuthProvider } from "@/context/AuthContext"
 
 interface ProvidersProps {
   children: ReactNode
@@ -12,9 +11,7 @@ interface ProvidersProps {
 export function Providers({ children }: ProvidersProps) {
   return (
     <Provider store={store}>
-      <AuthProvider>
-        {children}
-      </AuthProvider>
+      {children}
     </Provider>
   )
 }

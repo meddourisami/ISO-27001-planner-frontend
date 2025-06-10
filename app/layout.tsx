@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { Toaster } from "@/components/ui/toaster";
 import { Providers } from "@/components/providers";
-import { AuthProvider } from '@/context/AuthContext';
 
 export const metadata: Metadata = {
   title: "ISO 27001 Planner",
@@ -40,12 +39,10 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <AuthProvider>
           <Providers>
             <main>{children}</main>
             <Toaster />
           </Providers>
-        </AuthProvider>
       </body>
     </html>
   )

@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast"
 import { LogOut, Smartphone } from "lucide-react"
 import MfaSetup from "@/components/mfa-setup"
 import { updateProfile, changePassword, logout, disableMfa, getCurrentUserDetails, resendMfa, enableMfa } from "@/lib/auth"
+import { useDispatch } from "react-redux"
+import { logOuT } from "@/lib/features/auth/authSlice";
 
 interface UserProfileProps {
   user: {
@@ -24,6 +26,7 @@ interface UserProfileProps {
 }
 
 export default function UserProfile({ user, onProfileRefresh }: UserProfileProps) {
+  const dispatch = useDispatch();
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("account")
   const [showMfaSetup, setShowMfaSetup] = useState(false)
@@ -121,6 +124,9 @@ export default function UserProfile({ user, onProfileRefresh }: UserProfileProps
   const handleLogout = async () => {
     try {
       await logout()
+      dispatch(logOuT()); // this clears Redux state
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
       window.location.href = "/login"
     } catch {
       toast({

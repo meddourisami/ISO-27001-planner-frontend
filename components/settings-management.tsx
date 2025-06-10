@@ -25,6 +25,8 @@ import { BackendUser, User } from "@/types"
 import { deleteMember, editMember, fetchCompanyDetails, fetchCompanyUsers, fetchRoles, listMembers, registerMember, updateCompanyDetails } from "../utils/api"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/context/AuthContext";
+import { useSelector } from "react-redux"
+import { RootState } from "@/lib/store"
 
 
 export default function SettingsManagement() {
@@ -37,7 +39,7 @@ export default function SettingsManagement() {
     targetEmail?: string; // optional field for original email
   };
   const { toast } = useToast()
-  const { user } = useAuth();
+  const user = useSelector((state: RootState) => state.auth.user);
   const [activeTab, setActiveTab] = useState("general")
   const [organizationName, setOrganizationName] = useState("");
   const [ismsScope, setIsmsScope] = useState("");

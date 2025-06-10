@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useSelector, useDispatch } from "react-redux"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -21,12 +21,15 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Search, Filter, ArrowUpDown, AlertTriangle, CheckCircle2, XCircle } from "lucide-react"
-import type { RootState } from "@/lib/store"
-import { addRisk, updateRisk, deleteRisk } from "@/lib/features/risks/risksSlice"
+import type { AppDispatch, RootState } from "@/lib/store"
+import {fetchRisks, updateRiskAsync, addRiskAsync, deleteRiskAsync } from "@/lib/features/risks/risksSlice"
+import { RiskDto } from "@/types"
+import { useAppSelector } from "@/lib/hooks"
 
 export default function RiskAssessment() {
-  const risks = useSelector((state: RootState) => state.risks.items)
-  const dispatch = useDispatch()
+  const { items: risks, loading } = useSelector((state: RootState) => state.risks);
+  const { user } = useAppSelector((state) => state.auth)
+  const dispatch = useDispatch<AppDispatch>()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -49,25 +52,30 @@ export default function RiskAssessment() {
     treatment: "",
     controls: "",
     dueDate: "",
+    companyId: "",
   })
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
 
-  const handleAddRisk = () => {
-    if (isEditing) {
-      dispatch(updateRisk(newRisk))
-    } else {
-      dispatch(
-        addRisk({
-          ...newRisk,
-          id: Date.now().toString(),
-        }),
-      )
+  useEffect(() => {
+    if (user?.companyId) {
+      dispatch(fetchRisks(user.companyId))
     }
-    setDialogOpen(false)
-    resetForm()
-  }
+  }, [dispatch, user?.companyId])
+
+  const handleAddRisk = () => {
+    const riskPayload = { ...newRisk }; // ensure matches RiskDto without id
+    if (isEditing) {
+      dispatch(updateRiskAsync(newRisk as RiskDto));
+    } else {
+      dispatch(addRiskAsync(riskPayload));
+    }
+    resetForm();
+    setDialogOpen(false);
+  };
+
+  const handleDelete = (id: string) => dispatch(deleteRiskAsync(id));
 
   const resetForm = () => {
     setNewRisk({
@@ -85,6 +93,7 @@ export default function RiskAssessment() {
       treatment: "",
       controls: "",
       dueDate: "",
+      companyId: "",
     })
     setIsEditing(false)
   }
