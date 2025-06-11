@@ -1,10 +1,6 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit"
 import { RiskDto } from "@/types";
 import { createRisk, deleteRiskApi, listRisks, updateRiskApi } from "@utils/api";
-import { RootState } from "@/lib/store";
-import { useAuth } from "@/context/AuthContext";
-import { useSelector } from "react-redux";
-
 
 
 export const fetchRisks = createAsyncThunk<RiskDto[], number>(
@@ -16,11 +12,15 @@ export const fetchRisks = createAsyncThunk<RiskDto[], number>(
 
 export const addRiskAsync = createAsyncThunk<RiskDto, Omit<RiskDto, 'id'>>(
   'risks/add',
-  async (risk) => {
-    return await createRisk(risk)
+  async (riskWithoutId, { rejectWithValue }) => {
+    try {
+      const created = await createRisk(riskWithoutId);
+      return created; // Expect full RiskDto with `id`
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.message || err.message);
+    }
   }
-)
-
+);
 
 export const updateRiskAsync = createAsyncThunk(
   'risks/update',

@@ -56,9 +56,9 @@ export async function listRisks(companyId: number): Promise<RiskDto[]> {
   return data
 }
 
-export async function createRisk(risk: RiskDto): Promise<RiskDto> {
-  const { data } = await api.post<RiskDto>('/risks', risk)
-  return data
+export async function createRisk(risk: Omit<RiskDto, 'id'>): Promise<RiskDto> {
+  const { data } = await api.post<RiskDto>('/risks', risk);
+  return data;
 }
 
 export async function updateRiskApi(risk: RiskDto): Promise<RiskDto> {

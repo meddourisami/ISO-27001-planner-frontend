@@ -25,11 +25,14 @@ import type { AppDispatch, RootState } from "@/lib/store"
 import {fetchRisks, updateRiskAsync, addRiskAsync, deleteRiskAsync } from "@/lib/features/risks/risksSlice"
 import { RiskDto } from "@/types"
 import { useAppSelector } from "@/lib/hooks"
+import { useToast } from "@/hooks/use-toast"
+
 
 export default function RiskAssessment() {
   const { items: risks, loading } = useSelector((state: RootState) => state.risks);
   const { user } = useAppSelector((state) => state.auth)
   const dispatch = useDispatch<AppDispatch>()
+  const { toast } = useToast()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -52,7 +55,6 @@ export default function RiskAssessment() {
     treatment: "",
     controls: "",
     dueDate: "",
-    companyId: "",
   })
 
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -61,19 +63,53 @@ export default function RiskAssessment() {
   useEffect(() => {
     if (user?.companyId) {
       dispatch(fetchRisks(user.companyId))
+      console.log(risks)
     }
   }, [dispatch, user?.companyId])
 
-  const handleAddRisk = () => {
-    const riskPayload = { ...newRisk }; // ensure matches RiskDto without id
-    if (isEditing) {
-      dispatch(updateRiskAsync(newRisk as RiskDto));
-    } else {
-      dispatch(addRiskAsync(riskPayload));
+  const handleAddRisk = async () => {
+  try {
+    if (!user?.companyId) {
+      toast({
+        title: "Missing Company ID",
+        description: "User is not associated with a company.",
+        variant: "destructive",
+      });
+      return;
     }
+
+    const { id, asset, owner, ...rest } = newRisk;
+
+    const payload: Omit<RiskDto, "id"> = {
+      ...rest,
+      assetId: asset, // renamed
+      ownerEmail: user.email, // renamed
+      companyId: user.companyId, // ensure it's a number
+      dueDate: newRisk.dueDate || new Date().toISOString(), // fallback or format
+    };
+
+    console.log("Creating Risk Payload:", payload);
+
+    if (isEditing) {
+      await dispatch(updateRiskAsync({ ...newRisk, companyId: user.companyId })).unwrap();
+      toast({ title: "Risk Updated", description: "Risk details updated successfully." });
+    } else {
+      await dispatch(addRiskAsync(payload)).unwrap();
+      toast({ title: "Risk Added", description: "New risk created successfully." });
+    }
+
     resetForm();
     setDialogOpen(false);
-  };
+  } catch (error: any) {
+    console.error("Failed to add/update risk", error);
+
+    toast({
+      title: "Error",
+      description: error?.response?.data?.message || error?.message || "Unexpected error occurred.",
+      variant: "destructive",
+    });
+  }
+};
 
   const handleDelete = (id: string) => dispatch(deleteRiskAsync(id));
 
@@ -103,6 +139,13 @@ export default function RiskAssessment() {
     setIsEditing(true)
     setDialogOpen(true)
   }
+
+  const calculateSeverity = (likelihood: string, impact: string): string => {
+    if (likelihood === "critical" && impact === "critical") return "critical";
+    if (likelihood === "critical" || impact === "critical" || (likelihood === "high" && impact === "high")) return "high";
+    if (likelihood === "low" && impact === "low") return "low";
+    return "medium";
+  };
 
   const filteredRisks = risks
     .filter(
@@ -253,6 +296,9 @@ export default function RiskAssessment() {
     }
   }
 
+  const capitalize = (str?: string | null): string =>
+  str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
+
   return (
     <div className="space-y-4">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
@@ -290,7 +336,7 @@ export default function RiskAssessment() {
                           <Label htmlFor="title">Risk Title</Label>
                           <Input
                             id="title"
-                            value={newRisk.title}
+                            value={newRisk.title ?? ""}
                             onChange={(e) => setNewRisk({ ...newRisk, title: e.target.value })}
                           />
                         </div>
@@ -298,7 +344,7 @@ export default function RiskAssessment() {
                           <Label htmlFor="description">Description</Label>
                           <Textarea
                             id="description"
-                            value={newRisk.description}
+                            value={newRisk.description ?? ""}
                             onChange={(e) => setNewRisk({ ...newRisk, description: e.target.value })}
                           />
                         </div>
@@ -306,7 +352,7 @@ export default function RiskAssessment() {
                           <Label htmlFor="asset">Asset</Label>
                           <Input
                             id="asset"
-                            value={newRisk.asset}
+                            value={newRisk.asset ?? ""}
                             onChange={(e) => setNewRisk({ ...newRisk, asset: e.target.value })}
                           />
                         </div>
@@ -314,7 +360,7 @@ export default function RiskAssessment() {
                           <Label htmlFor="threat">Threat</Label>
                           <Input
                             id="threat"
-                            value={newRisk.threat}
+                            value={newRisk.threat ?? ""}
                             onChange={(e) => setNewRisk({ ...newRisk, threat: e.target.value })}
                           />
                         </div>
@@ -322,15 +368,21 @@ export default function RiskAssessment() {
                           <Label htmlFor="vulnerability">Vulnerability</Label>
                           <Input
                             id="vulnerability"
-                            value={newRisk.vulnerability}
+                            value={newRisk.vulnerability ?? ""}
                             onChange={(e) => setNewRisk({ ...newRisk, vulnerability: e.target.value })}
                           />
                         </div>
                         <div>
                           <Label htmlFor="likelihood">Likelihood</Label>
                           <Select
-                            value={newRisk.likelihood}
-                            onValueChange={(value) => setNewRisk({ ...newRisk, likelihood: value })}
+                            value={newRisk.likelihood ?? "low"}
+                            onValueChange={(value) =>
+                              setNewRisk(prev => ({
+                                ...prev,
+                                likelihood: value,
+                                severity: calculateSeverity(value, prev.impact),
+                              }))
+                            }
                           >
                             <SelectTrigger id="likelihood">
                               <SelectValue placeholder="Select likelihood" />
@@ -346,8 +398,14 @@ export default function RiskAssessment() {
                         <div>
                           <Label htmlFor="impact">Impact</Label>
                           <Select
-                            value={newRisk.impact}
-                            onValueChange={(value) => setNewRisk({ ...newRisk, impact: value })}
+                            value={newRisk.impact ?? "low"}
+                            onValueChange={(value) =>
+                              setNewRisk(prev => ({
+                                ...prev,
+                                impact: value,
+                                severity: calculateSeverity(prev.likelihood, value),
+                              }))
+                            }
                           >
                             <SelectTrigger id="impact">
                               <SelectValue placeholder="Select impact" />
@@ -361,26 +419,19 @@ export default function RiskAssessment() {
                           </Select>
                         </div>
                         <div>
-                          <Label htmlFor="severity">Severity</Label>
-                          <Select
-                            value={newRisk.severity}
-                            onValueChange={(value) => setNewRisk({ ...newRisk, severity: value })}
+                          <Label>Severity</Label>
+                          <div
+                            className={`mt-1 px-3 py-2 border rounded text-sm font-medium ${getSeverityColor(
+                              newRisk.severity
+                            )}`}
                           >
-                            <SelectTrigger id="severity">
-                              <SelectValue placeholder="Select severity" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="low">Low</SelectItem>
-                              <SelectItem value="medium">Medium</SelectItem>
-                              <SelectItem value="high">High</SelectItem>
-                              <SelectItem value="critical">Critical</SelectItem>
-                            </SelectContent>
-                          </Select>
+                            {newRisk.severity.charAt(0).toUpperCase() + newRisk.severity.slice(1)}
+                          </div>
                         </div>
                         <div>
                           <Label htmlFor="status">Status</Label>
                           <Select
-                            value={newRisk.status}
+                            value={newRisk.status ?? "open"}
                             onValueChange={(value) => setNewRisk({ ...newRisk, status: value })}
                           >
                             <SelectTrigger id="status">
@@ -398,7 +449,7 @@ export default function RiskAssessment() {
                           <Label htmlFor="owner">Owner</Label>
                           <Input
                             id="owner"
-                            value={newRisk.owner}
+                            value={newRisk.owner ?? ""}
                             onChange={(e) => setNewRisk({ ...newRisk, owner: e.target.value })}
                           />
                         </div>
@@ -406,7 +457,7 @@ export default function RiskAssessment() {
                           <Label htmlFor="treatment">Treatment</Label>
                           <Textarea
                             id="treatment"
-                            value={newRisk.treatment}
+                            value={newRisk.treatment ?? ""}
                             onChange={(e) => setNewRisk({ ...newRisk, treatment: e.target.value })}
                             placeholder="Recommended treatment for the risk"
                           />
@@ -415,7 +466,7 @@ export default function RiskAssessment() {
                           <Label htmlFor="controls">Controls</Label>
                           <Textarea
                             id="controls"
-                            value={newRisk.controls}
+                            value={newRisk.controls ?? ""}
                             onChange={(e) => setNewRisk({ ...newRisk, controls: e.target.value })}
                             placeholder="Existing or planned controls to mitigate the risk"
                           />
@@ -425,7 +476,7 @@ export default function RiskAssessment() {
                           <Input
                             id="dueDate"
                             type="date"
-                            value={newRisk.dueDate}
+                            value={newRisk.dueDate ?? ""}
                             onChange={(e) => setNewRisk({ ...newRisk, dueDate: e.target.value })}
                           />
                         </div>
@@ -573,12 +624,12 @@ export default function RiskAssessment() {
                         <TableCell>{risk.asset}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={getSeverityColor(risk.severity)}>
-                            {risk.severity.charAt(0).toUpperCase() + risk.severity.slice(1)}
+                            {capitalize(risk.severity)}
                           </Badge>
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className={getStatusColor(risk.status)}>
-                            {risk.status.charAt(0).toUpperCase() + risk.status.slice(1)}
+                            {capitalize(risk.status)}
                           </Badge>
                         </TableCell>
                         <TableCell>{risk.owner}</TableCell>
@@ -664,7 +715,7 @@ export default function RiskAssessment() {
                           className={`flex-1 p-2 border ${getSeverityBgColor(cell.severity)} min-h-[100px] flex flex-col`}
                         >
                           <div className="text-xs font-medium mb-1 text-center">
-                            {cell.severity.charAt(0).toUpperCase() + cell.severity.slice(1)}
+                            {capitalize(cell.severity)}
                             {cell.risks.length > 0 && ` (${cell.risks.length})`}
                           </div>
                           <div className="flex-1 overflow-y-auto text-xs">
