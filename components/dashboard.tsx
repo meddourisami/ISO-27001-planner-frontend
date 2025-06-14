@@ -32,11 +32,27 @@ export default function Dashboard() {
   // Calculate dashboard metrics
   const dashboardMetrics = useMemo(() => {
     // Risk metrics
-    const openRisks = risks.filter((risk) => risk.status === "open" || risk.status === "in-progress")
-    const criticalRisks = openRisks.filter((risk) => risk.severity === "critical").length
-    const highRisks = openRisks.filter((risk) => risk.severity === "high").length
-    const mediumRisks = openRisks.filter((risk) => risk.severity === "medium").length
-    const lowRisks = openRisks.filter((risk) => risk.severity === "low").length
+    const openRisks = risks.filter(
+      (risk) =>
+        risk.status.toLowerCase() === "open" ||
+        risk.status.toLowerCase() === "in-progress"
+    );
+    
+    const criticalRisks = openRisks.filter(
+      (risk) => risk.severity.toLowerCase() === "critical"
+    ).length;
+    
+    const highRisks = openRisks.filter(
+      (risk) => risk.severity.toLowerCase() === "high"
+    ).length;
+    
+    const mediumRisks = openRisks.filter(
+      (risk) => risk.severity.toLowerCase() === "medium"
+    ).length;
+    
+    const lowRisks = openRisks.filter(
+      (risk) => risk.severity.toLowerCase() === "low"
+    ).length;
 
     // Task metrics
     const pendingTasks = tasks.filter((task) => task.status !== "done")

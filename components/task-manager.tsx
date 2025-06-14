@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useSelector, useDispatch } from "react-redux"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -20,20 +20,25 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Search, Filter, ArrowUpDown, CheckCircle2, Clock, AlertCircle } from "lucide-react"
-import type { RootState } from "@/lib/store"
-import { addTask, updateTask } from "@/lib/features/tasks/tasksSlice"
+import type { AppDispatch, RootState } from "@/lib/store"
+import { addTask, addTaskAsync, deleteTaskAsync, fetchTasksAsync, updateTask, updateTaskAsync } from "@/lib/features/tasks/tasksSlice"
+import { TaskDto } from "@/types"
+import { useToast } from "@/hooks/use-toast"
 
 export default function TaskManager() {
-  const tasks = useSelector((state: RootState) => state.tasks.items)
-  const dispatch = useDispatch()
+  const dispatch = useDispatch<AppDispatch>()
+  const tasks = useSelector((state: RootState) => state.tasks.items);
+  const loading = useSelector((state: RootState) => state.tasks.loading);
+  const user = useSelector((state: RootState) => state.auth.user);
+
+  const { toast } = useToast()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [filterPriority, setFilterPriority] = useState("all")
   const [sortBy, setSortBy] = useState("dueDate")
   const [sortOrder, setSortOrder] = useState("asc")
 
-  const [newTask, setNewTask] = useState({
-    id: "",
+  const [newTask, setNewTask] = useState<TaskDto>({
     title: "",
     description: "",
     assignee: "",
@@ -43,25 +48,67 @@ export default function TaskManager() {
     category: "implementation",
     progress: 0,
     relatedControl: "",
-  })
+    companyId: 0,
+  });
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
 
-  const handleAddTask = () => {
-    if (isEditing) {
-      dispatch(updateTask(newTask))
-    } else {
-      dispatch(
-        addTask({
-          ...newTask,
-          id: Date.now().toString(),
-        }),
-      )
+  useEffect(() => {
+      if (user?.companyId) {
+        dispatch(fetchTasksAsync(user.companyId));
+      }
+    }, [user?.companyId, dispatch]);
+
+  const handleAddTask = async () => {
+    if (!user || !user.companyId) {
+      toast({
+        title: "Missing Company Information",
+        description: "You must be logged in with a valid company to add a task.",
+        variant: "destructive",
+      });
+      return;
     }
-    setDialogOpen(false)
-    resetForm()
-  }
+  
+    try {
+      const dto: TaskDto = {
+        ...newTask,
+        id: isEditing ? newTask.id : undefined,
+        companyId: user.companyId,
+      };
+    
+      if (isEditing) {
+        await dispatch(updateTaskAsync(dto)).unwrap();
+        toast({ title: "Task Updated", description: "Task updated successfully." });
+      } else {
+        await dispatch(addTaskAsync(dto)).unwrap();
+        toast({ title: "Task Added", description: "Task created successfully." });
+      }
+    
+      setDialogOpen(false);
+      setIsEditing(false);
+      resetForm();
+    } catch (error: any) {
+      toast({
+        title: "Error Saving Task",
+        description: error?.message || "An error occurred while saving the task.",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  const handleDelete = async (id: string) => {
+    try {
+      await dispatch(deleteTaskAsync(id)).unwrap();
+      toast({ title: "Task Deleted", description: "Task removed successfully." });
+    } catch (error: any) {
+      toast({
+        title: "Delete Failed",
+        description: error?.message || "Could not delete the task.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const resetForm = () => {
     setNewTask({
@@ -75,6 +122,7 @@ export default function TaskManager() {
       category: "implementation",
       progress: 0,
       relatedControl: "",
+      companyId: 0,
     })
     setIsEditing(false)
   }

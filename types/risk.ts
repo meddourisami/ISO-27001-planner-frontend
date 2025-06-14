@@ -2,14 +2,14 @@ export interface RiskDto {
     id?: string;
     title: string;
     description: string;
-    asset: string;
+    assetId: string;
     threat: string;
     vulnerability: string;
     likelihood: string;
     impact: string;
     severity: string;
     status: string;
-    owner: string;
+    ownerEmail: string;
     treatment: string;
     controls: string;
     dueDate: string;

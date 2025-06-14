@@ -26,10 +26,12 @@ import {fetchRisks, updateRiskAsync, addRiskAsync, deleteRiskAsync } from "@/lib
 import { RiskDto } from "@/types"
 import { useAppSelector } from "@/lib/hooks"
 import { useToast } from "@/hooks/use-toast"
+import { addRiskToAsset } from "@/lib/features/assets/assetsSlice"
 
 
 export default function RiskAssessment() {
   const { items: risks, loading } = useSelector((state: RootState) => state.risks);
+  const assets = useSelector((state: RootState) => state.assets.items)
   const { user } = useAppSelector((state) => state.auth)
   const dispatch = useDispatch<AppDispatch>()
   const { toast } = useToast()
@@ -44,14 +46,14 @@ export default function RiskAssessment() {
     id: "",
     title: "",
     description: "",
-    asset: "",
+    assetId: "",
     threat: "",
     vulnerability: "",
     likelihood: "low",
     impact: "low",
     severity: "low",
     status: "open",
-    owner: "",
+    ownerEmail: "",
     treatment: "",
     controls: "",
     dueDate: "",
@@ -69,44 +71,51 @@ export default function RiskAssessment() {
 
   const handleAddRisk = async () => {
   try {
-    if (!user?.companyId) {
-      toast({
-        title: "Missing Company ID",
-        description: "User is not associated with a company.",
-        variant: "destructive",
-      });
-      return;
-    }
+    console.log("[DEBUG] Starting handleAddRisk", { newRisk, isEditing, user });
 
-    const { id, asset, owner, ...rest } = newRisk;
+    if (!user?.companyId) throw new Error("Missing company ID");
 
-    const payload: Omit<RiskDto, "id"> = {
+    const { id, ownerEmail, ...rest } = newRisk;
+    const base: Omit<RiskDto, "id"> = {
       ...rest,
-      assetId: asset, // renamed
-      ownerEmail: user.email, // renamed
-      companyId: user.companyId, // ensure it's a number
-      dueDate: newRisk.dueDate || new Date().toISOString(), // fallback or format
+      ownerEmail: user.email!,
+      companyId: user.companyId,
+      dueDate: newRisk.dueDate || new Date().toISOString(),
     };
 
-    console.log("Creating Risk Payload:", payload);
+    console.log("[DEBUG] Payload to API:", base);
 
     if (isEditing) {
-      await dispatch(updateRiskAsync({ ...newRisk, companyId: user.companyId })).unwrap();
-      toast({ title: "Risk Updated", description: "Risk details updated successfully." });
+      const updated = await dispatch(updateRiskAsync({ ...newRisk, companyId: user.companyId })).unwrap();
+      console.log("[DEBUG] Risk updated:", updated);
+
+      if (updated.assetId) {
+        const result = await dispatch(addRiskToAsset({ assetId: updated.assetId, riskId: updated.id! })).unwrap();
+        console.log("[DEBUG] addRiskToAsset result:", result);
+      }
+
+      toast({ title: "Risk Updated", description: "Risk saved." });
     } else {
-      await dispatch(addRiskAsync(payload)).unwrap();
-      toast({ title: "Risk Added", description: "New risk created successfully." });
+      const created = await dispatch(addRiskAsync(base)).unwrap();
+      console.log("[DEBUG] Risk created:", created);
+
+      if (created.assetId) {
+        const result = await dispatch(addRiskToAsset({ assetId: created.assetId, riskId: created.id! })).unwrap();
+        console.log("[DEBUG] addRiskToAsset result:", result);
+      }
+
+      toast({ title: "Risk Added", description: "New risk created." });
     }
 
     resetForm();
     setDialogOpen(false);
-  } catch (error: any) {
-    console.error("Failed to add/update risk", error);
 
+  } catch (error: any) {
+    console.error("[ERROR] handleAddRisk error:", error);
     toast({
       title: "Error",
-      description: error?.response?.data?.message || error?.message || "Unexpected error occurred.",
-      variant: "destructive",
+      description: error.message || "Something went wrong",
+      variant: "destructive"
     });
   }
 };
@@ -118,14 +127,14 @@ export default function RiskAssessment() {
       id: "",
       title: "",
       description: "",
-      asset: "",
+      assetId: "",
       threat: "",
       vulnerability: "",
       likelihood: "low",
       impact: "low",
       severity: "low",
       status: "open",
-      owner: "",
+      ownerEmail: "",
       treatment: "",
       controls: "",
       dueDate: "",
@@ -147,12 +156,18 @@ export default function RiskAssessment() {
     return "medium";
   };
 
+  const getAssetName = (assetId: string | undefined) => {
+    if (!assetId) return "No asset";
+    const asset = assets.find((a) => a.id === assetId);
+    return asset ? asset.name : "Unknown asset";
+  };
+
   const filteredRisks = risks
     .filter(
       (risk) =>
         risk.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         risk.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        risk.asset.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        risk.assetId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         risk.threat.toLowerCase().includes(searchTerm.toLowerCase()) ||
         risk.vulnerability.toLowerCase().includes(searchTerm.toLowerCase()),
     )
@@ -183,12 +198,12 @@ export default function RiskAssessment() {
 
   // Calculate risk counts by severity
   const riskCounts = {
-    critical: filteredRisks.filter((risk) => risk.severity === "critical").length,
-    high: filteredRisks.filter((risk) => risk.severity === "high").length,
-    medium: filteredRisks.filter((risk) => risk.severity === "medium").length,
-    low: filteredRisks.filter((risk) => risk.severity === "low").length,
+    critical: filteredRisks.filter((r) => r.severity.toLowerCase() === "critical").length,
+    high: filteredRisks.filter((r) => r.severity.toLowerCase() === "high").length,
+    medium: filteredRisks.filter((r) => r.severity.toLowerCase() === "medium").length,
+    low: filteredRisks.filter((r) => r.severity.toLowerCase() === "low").length,
     total: filteredRisks.length,
-  }
+  };
 
   // Create matrix data
   const matrixData = (() => {
@@ -350,11 +365,31 @@ export default function RiskAssessment() {
                         </div>
                         <div>
                           <Label htmlFor="asset">Asset</Label>
-                          <Input
-                            id="asset"
-                            value={newRisk.asset ?? ""}
-                            onChange={(e) => setNewRisk({ ...newRisk, asset: e.target.value })}
-                          />
+                          <Select
+                            value={newRisk.assetId || "none"}
+                            onValueChange={(value) =>
+                              setNewRisk({ ...newRisk, assetId: value === "none" ? undefined : value })
+                            }
+                          >
+                            <SelectTrigger id="asset">
+                              <SelectValue
+                                placeholder="Select asset"
+                                children={
+                                  newRisk.assetId
+                                    ? assets.find((a) => a.id === newRisk.assetId)?.name || "Select asset"
+                                    : "No asset selected"
+                                }
+                              />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">No Asset</SelectItem>
+                              {assets.map((asset) => (
+                                <SelectItem key={asset.id} value={asset.id}>
+                                  {asset.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div>
                           <Label htmlFor="threat">Threat</Label>
@@ -449,8 +484,8 @@ export default function RiskAssessment() {
                           <Label htmlFor="owner">Owner</Label>
                           <Input
                             id="owner"
-                            value={newRisk.owner ?? ""}
-                            onChange={(e) => setNewRisk({ ...newRisk, owner: e.target.value })}
+                            value={newRisk.ownerEmail ?? ""}
+                            onChange={(e) => setNewRisk({ ...newRisk, ownerEmail: e.target.value })}
                           />
                         </div>
                         <div className="col-span-2">
@@ -526,7 +561,7 @@ export default function RiskAssessment() {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+                    setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
                   }}
                 >
                   <ArrowUpDown className="mr-2 h-4 w-4" />
@@ -555,7 +590,7 @@ export default function RiskAssessment() {
                         variant="ghost"
                         className="p-0 font-medium"
                         onClick={() => {
-                          setSortBy("asset")
+                          setSortBy("assetId")
                           setSortOrder(sortOrder === "asc" ? "desc" : "asc")
                         }}
                       >
@@ -594,7 +629,7 @@ export default function RiskAssessment() {
                         variant="ghost"
                         className="p-0 font-medium"
                         onClick={() => {
-                          setSortBy("owner")
+                          setSortBy("ownerEmail")
                           setSortOrder(sortOrder === "asc" ? "desc" : "asc")
                         }}
                       >
@@ -621,7 +656,13 @@ export default function RiskAssessment() {
                             <span className="ml-2">{risk.title}</span>
                           </div>
                         </TableCell>
-                        <TableCell>{risk.asset}</TableCell>
+                        <TableCell>
+                          {risk.assetId ? (
+                            getAssetName(risk.assetId)
+                          ) : (
+                            <Badge variant="destructive">Unlinked</Badge>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Badge variant="outline" className={getSeverityColor(risk.severity)}>
                             {capitalize(risk.severity)}
@@ -632,7 +673,7 @@ export default function RiskAssessment() {
                             {capitalize(risk.status)}
                           </Badge>
                         </TableCell>
-                        <TableCell>{risk.owner}</TableCell>
+                        <TableCell>{risk.ownerEmail}</TableCell>
                         <TableCell>
                           <div className="flex space-x-2">
                             <Button variant="ghost" size="sm" onClick={() => handleEdit(risk)}>

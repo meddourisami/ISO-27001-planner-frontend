@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useSelector, useDispatch } from "react-redux"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -21,71 +21,100 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Search, Filter, ArrowUpDown, FileText, Download, Eye, EditIcon } from "lucide-react"
 import type { RootState } from "@/lib/store"
-import { addDocument, updateDocument } from "@/lib/features/documents/documentsSlice"
+import { addDocument, createDocumentAsync, fetchDocumentsAsync, fetchVersionHistoryAsync, updateDocument } from "@/lib/features/documents/documentsSlice"
+import { downloadVersion } from "@utils/api"
+import { useToast } from "@/hooks/use-toast"
+import { DocumentDto } from "@/types"
+import { useDropzone } from "react-dropzone";
+
 
 export default function DocumentManagement() {
-  const documents = useSelector((state: RootState) => state.documents.items)
-  const dispatch = useDispatch()
+  const dispatch = useDispatch();
+  const documents = useSelector((state: RootState) => state.documents.items);
+  const versionHistory = useSelector((state: RootState) => state.documents.versions);
+  const user = useSelector((s: RootState) => s.auth.user);
+  const { toast } = useToast()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("all")
   const [sortBy, setSortBy] = useState("title")
   const [sortOrder, setSortOrder] = useState("asc")
 
-  const [newDocument, setNewDocument] = useState({
-    id: "",
+  const [newDocument, setNewDocument] = useState<Omit<DocumentDto, "id" | "companyId">>({
     title: "",
     description: "",
     type: "policy",
     status: "draft",
     version: "1.0",
-    owner: "",
-    approver: "",
+    ownerEmail: user?.email || "",
+    approverEmail: "",
     approvalDate: "",
     reviewDate: "",
     content: "",
-  })
+  });
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const [currentDocId, setCurrentDocId] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
 
-  const handleAddDocument = () => {
-    if (isEditing) {
-      dispatch(updateDocument(newDocument))
-    } else {
-      dispatch(
-        addDocument({
-          ...newDocument,
-          id: Date.now().toString(),
-        }),
-      )
+  useEffect(() => {
+    dispatch(fetchDocumentsAsync());
+  }, [dispatch]);
+
+  const handleAddDocument = async () => {
+    if (!user?.companyId) return toast({ title: "Error", description: "Missing company." });
+
+    const dto: Omit<DocumentDto, "id"> = {
+      ...newDocument,
+      companyId: user.companyId,
+    };
+
+    try {
+      if (isEditing && currentDocId) {
+        if (file) {
+          await dispatch(uploadNewVersionAsync({ id: currentDocId, version: newDocument.version, file })).unwrap();
+        }
+      } else {
+        await dispatch(createDocumentAsync({ dto, file })).unwrap();
+      }
+      toast({ title: "Success", description: `Document ${isEditing ? "updated" : "created"}` });
+      setDialogOpen(false);
+      resetForm();
+    } catch (err: any) {
+      toast({ title: "Error", description: err || err.message, variant: "destructive" });
     }
-    setDialogOpen(false)
-    resetForm()
-  }
+  };
 
   const resetForm = () => {
     setNewDocument({
-      id: "",
       title: "",
       description: "",
       type: "policy",
       status: "draft",
       version: "1.0",
-      owner: "",
-      approver: "",
+      ownerEmail: user?.email || "",
+      approverEmail: "",
       approvalDate: "",
       reviewDate: "",
       content: "",
-    })
-    setIsEditing(false)
-  }
+    });
+    setFile(null);
+    setIsEditing(false);
+    setCurrentDocId(null);
+  };
+
 
   const handleEdit = (document: any) => {
     setNewDocument(document)
     setIsEditing(true)
     setDialogOpen(true)
   }
+
+  const { getRootProps, getInputProps } = useDropzone({
+    multiple: false,
+    onDrop: files => files.length && setFile(files[0]),
+  });
 
   const filteredDocuments = documents
     .filter(
@@ -104,6 +133,8 @@ export default function DocumentManagement() {
 
       return 0
     })
+  
+  
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -129,56 +160,45 @@ export default function DocumentManagement() {
               <CardTitle>Document Management</CardTitle>
               <CardDescription>Manage your ISMS policies, procedures, and records</CardDescription>
             </div>
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <Dialog open={dialogOpen} onOpenChange={(v) => { if (!v) resetForm(); setDialogOpen(v); }}>
               <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Document
-                </Button>
+                <Button><span className="mr-2">➕</span> {isEditing ? "Edit Document" : "Add Document"}</Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
                 <DialogHeader>
                   <DialogTitle>{isEditing ? "Edit Document" : "Add New Document"}</DialogTitle>
                   <DialogDescription>
-                    {isEditing
-                      ? "Update the document details below"
-                      : "Fill in the details to add a new document to your ISMS"}
+                    {isEditing ? "Update fields and optionally upload new version" : "Fill details and upload file if available"}
                   </DialogDescription>
                 </DialogHeader>
-                <div className="flex-1 overflow-y-auto px-2 py-4">
-                <div className="grid gap-4 py-4">
+
+                <div className="flex-1 overflow-y-auto space-y-4 py-2">
+                  <div className="grid gap-4 py-4">
+                  {/* Form fields */}
+                  <div>
+                    <Label htmlFor="title">Title</Label>
+                    <Input id="title" value={newDocument.title} onChange={e => setNewDocument({ ...newDocument, title: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea id="description" value={newDocument.description} onChange={e => setNewDocument({ ...newDocument, description: e.target.value })} />
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2">
-                      <Label htmlFor="title">Document Title</Label>
-                      <Input
-                        id="title"
-                        value={newDocument.title}
-                        onChange={(e) => setNewDocument({ ...newDocument, title: e.target.value })}
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <Label htmlFor="description">Description</Label>
-                      <Textarea
-                        id="description"
-                        value={newDocument.description}
-                        onChange={(e) => setNewDocument({ ...newDocument, description: e.target.value })}
-                      />
-                    </div>
                     <div>
-                      <Label htmlFor="type">Document Type</Label>
+                      <Label htmlFor="type">Type</Label>
                       <Select
                         value={newDocument.type}
-                        onValueChange={(value) => setNewDocument({ ...newDocument, type: value })}
+                        onValueChange={(v) => setNewDocument({ ...newDocument, type: v })}
                       >
                         <SelectTrigger id="type">
-                          <SelectValue placeholder="Select type" />
+                          <SelectValue placeholder="Type" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="policy">Policy</SelectItem>
-                          <SelectItem value="procedure">Procedure</SelectItem>
-                          <SelectItem value="standard">Standard</SelectItem>
-                          <SelectItem value="record">Record</SelectItem>
-                          <SelectItem value="form">Form</SelectItem>
+                          {["policy", "procedure", "standard", "record", "form"].map((o) => (
+                            <SelectItem key={o} value={o}>
+                              {o.charAt(0).toUpperCase() + o.slice(1)}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -186,85 +206,79 @@ export default function DocumentManagement() {
                       <Label htmlFor="status">Status</Label>
                       <Select
                         value={newDocument.status}
-                        onValueChange={(value) => setNewDocument({ ...newDocument, status: value })}
+                        onValueChange={(v) => setNewDocument({ ...newDocument, status: v })}
                       >
                         <SelectTrigger id="status">
-                          <SelectValue placeholder="Select status" />
+                          <SelectValue placeholder="Status" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="draft">Draft</SelectItem>
-                          <SelectItem value="review">In Review</SelectItem>
-                          <SelectItem value="approved">Approved</SelectItem>
-                          <SelectItem value="obsolete">Obsolete</SelectItem>
+                          {["draft", "review", "approved", "obsolete"].map((s) => (
+                            <SelectItem key={s} value={s}>
+                              {s.charAt(0).toUpperCase() + s.slice(1)}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="version">Version</Label>
-                      <Input
-                        id="version"
-                        value={newDocument.version}
-                        onChange={(e) => setNewDocument({ ...newDocument, version: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="owner">Document Owner</Label>
-                      <Input
-                        id="owner"
-                        value={newDocument.owner}
-                        onChange={(e) => setNewDocument({ ...newDocument, owner: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="approver">Approver</Label>
-                      <Input
-                        id="approver"
-                        value={newDocument.approver}
-                        onChange={(e) => setNewDocument({ ...newDocument, approver: e.target.value })}
-                      />
+                      <Input id="version" value={newDocument.version} onChange={e => setNewDocument({ ...newDocument, version: e.target.value })} />
                     </div>
                     <div>
                       <Label htmlFor="approvalDate">Approval Date</Label>
-                      <Input
-                        id="approvalDate"
-                        type="date"
-                        value={newDocument.approvalDate}
-                        onChange={(e) => setNewDocument({ ...newDocument, approvalDate: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="reviewDate">Next Review Date</Label>
-                      <Input
-                        id="reviewDate"
-                        type="date"
-                        value={newDocument.reviewDate}
-                        onChange={(e) => setNewDocument({ ...newDocument, reviewDate: e.target.value })}
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <Label htmlFor="content">Document Content</Label>
-                      <Textarea
-                        id="content"
-                        value={newDocument.content}
-                        onChange={(e) => setNewDocument({ ...newDocument, content: e.target.value })}
-                        className="min-h-[200px]"
-                        placeholder="Enter document content or upload a file"
-                      />
+                      <Input id="approvalDate" type="date" value={newDocument.approvalDate} onChange={e => setNewDocument({ ...newDocument, approvalDate: e.target.value })} />
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="ownerEmail">Owner Email</Label>
+                      <Input id="ownerEmail" value={newDocument.ownerEmail} onChange={e => setNewDocument({ ...newDocument, ownerEmail: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label htmlFor="approver">Approver</Label>
+                      <Input id="approver" value={newDocument.approverEmail} onChange={e => setNewDocument({ ...newDocument, approverEmail: e.target.value })} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="reviewDate">Next Review</Label>
+                    <Input id="reviewDate" type="date" value={newDocument.reviewDate} onChange={e => setNewDocument({ ...newDocument, reviewDate: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Content / Summary</Label>
+                    <Textarea value={newDocument.content} onChange={e => setNewDocument({ ...newDocument, content: e.target.value })} />
+                  </div>
+                        
+                  {/* File upload */}
+                  <div>
+                    <Label>Upload File</Label>
+                    <div {...getRootProps()} className="p-4 rounded border-2 border-dashed hover:bg-gray-50">
+                      <input {...getInputProps()} />
+                      {file ? <p>📄 {file.name}</p> : <p>Drag & drop or click to select file</p>}
+                    </div>
+                  </div>
+                        
+                  {/* Version history */}
+                  {isEditing && currentDocId && versionHistory[currentDocId]?.length > 0 && (
+                    <div className="border-t pt-2">
+                      <h4>Version History</h4>
+                      <ul className="list-disc ml-4">
+                        {versionHistory[currentDocId].map(v => (
+                          <li key={v.id} className="flex items-center justify-between">
+                            <span>{v.version} – {new Date(v.uploadedAt).toLocaleDateString()}</span>
+                            <Button size="xs" onClick={() => dispatch(downloadVersionAsync(v.id))}>Download</Button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  </div>
                 </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setDialogOpen(false)
-                      resetForm()
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button onClick={handleAddDocument}>{isEditing ? "Update Document" : "Add Document"}</Button>
+                
+                <DialogFooter className="pt-4">
+                  <Button variant="outline" onClick={() => { resetForm(); setDialogOpen(false); }}>Cancel</Button>
+                  <Button onClick={handleAddDocument}>{isEditing ? "Save Changes" : "Create Document"}</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -288,11 +302,11 @@ export default function DocumentManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="policy">Policy</SelectItem>
-                <SelectItem value="procedure">Procedure</SelectItem>
-                <SelectItem value="standard">Standard</SelectItem>
-                <SelectItem value="record">Record</SelectItem>
-                <SelectItem value="form">Form</SelectItem>
+                {["policy", "procedure", "standard", "record", "form"].map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Button

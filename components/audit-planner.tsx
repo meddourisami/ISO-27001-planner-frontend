@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useSelector, useDispatch } from "react-redux"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -20,12 +20,20 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Search, Filter, ArrowUpDown, Calendar, CheckCircle2, XCircle } from "lucide-react"
-import type { RootState } from "@/lib/store"
-import { addAudit, updateAudit } from "@/lib/features/audits/auditsSlice"
+import type { AppDispatch, RootState } from "@/lib/store"
+import { addAuditAsync, deleteAuditAsync, fetchAuditsAsync, updateAuditAsync } from "@/lib/features/audits/auditsSlice"
+import { useAuthTokenRefresh } from "@/hooks/useAuthTokenRefresh"
+import { useToast } from "@/hooks/use-toast"
+import { AuditDto } from "@/types"
 
 export default function AuditPlanner() {
   const audits = useSelector((state: RootState) => state.audits.items)
-  const dispatch = useDispatch()
+  const loading = useSelector((s: RootState) => s.audits.loading);
+  const dispatch = useDispatch<AppDispatch>()
+
+  const { toast } = useToast()
+
+  const user = useSelector((state: RootState) => state.auth.user)
 
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("all")
@@ -51,20 +59,55 @@ export default function AuditPlanner() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
 
-  const handleAddAudit = () => {
-    if (isEditing) {
-      dispatch(updateAudit(newAudit))
-    } else {
-      dispatch(
-        addAudit({
-          ...newAudit,
-          id: Date.now().toString(),
-        }),
-      )
+  useEffect(() => {
+    if (user?.companyId) {
+      dispatch(fetchAuditsAsync(user.companyId));
     }
-    setDialogOpen(false)
-    resetForm()
-  }
+  }, [user?.companyId, dispatch]);
+
+  const handleAddAudit = async () => {
+    if (!user?.companyId) {
+      toast({
+        title: 'Missing Company ID',
+        description: '...',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const dto: AuditDto = {
+      ...newAudit,
+      auditor: user.email,
+      companyId: user.companyId,
+      id: isEditing ? newAudit.id : undefined
+    };
+
+    try {
+      if (isEditing) {
+        await dispatch(updateAuditAsync(dto)).unwrap();
+        toast({
+          title: "Audit Updated",
+          description: "Audit details have been successfully updated.",
+        });
+      } else {
+        await dispatch(addAuditAsync(dto)).unwrap();
+        toast({
+          title: "Audit Added",
+          description: "New audit has been successfully created.",
+        });
+      }
+      resetForm();
+      setDialogOpen(false);
+    } catch (e: any) {
+      console.error(e);
+      toast({
+        title: "Error",
+        description: typeof e === "string" ? e : e?.message ?? "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    }
+  };
+
 
   const resetForm = () => {
     setNewAudit({
@@ -90,6 +133,25 @@ export default function AuditPlanner() {
     setIsEditing(true)
     setDialogOpen(true)
   }
+
+  const handleDelete = async (id: string) => {
+    try {
+      if (!window.confirm("Are you sure you want to delete this audit?")) return;
+
+      await dispatch(deleteAuditAsync(id)).unwrap();
+      toast({
+        title: "Audit Deleted",
+        description: "The audit has been removed.",
+      });
+    } catch (e: any) {
+      console.error(e);
+      toast({
+        title: "Error",
+        description: typeof e === "string" ? e : e?.message ?? "Failed to delete audit.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const filteredAudits = audits
     .filter(

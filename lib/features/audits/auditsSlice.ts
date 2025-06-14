@@ -1,125 +1,79 @@
-import { createSlice, type PayloadAction } from "@reduxjs/toolkit"
+import { AuditDto } from "@/types";
+import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import { createAudit, deleteAuditApi, fetchAudits, updateAuditApi } from "@utils/api";
 
-interface Audit {
-  id: string
-  title: string
-  description: string
-  type: string
-  scope: string
-  date: string
-  endDate: string
-  status: string
-  auditor: string
-  findings: string
-  nonConformities: number
-  observations: number
-  recommendations: number
+interface AuditState {
+  items: AuditDto[];
+  loading: boolean;
+  error?: string;
 }
 
-interface AuditsState {
-  items: Audit[]
-}
+const initialState: AuditState = { items: [], loading: false };
 
-const initialState: AuditsState = {
-  items: [
-    {
-      id: "1",
-      title: "Annual Internal Audit",
-      description: "Comprehensive internal audit of all ISMS controls",
-      type: "internal",
-      scope: "All Annex A controls",
-      date: "2025-04-15",
-      endDate: "2025-04-20",
-      status: "planned",
-      auditor: "Internal Audit Team",
-      findings: "",
-      nonConformities: 0,
-      observations: 0,
-      recommendations: 0,
-    },
-    {
-      id: "2",
-      title: "ISO 27001 Surveillance Audit",
-      description: "External surveillance audit by certification body",
-      type: "surveillance",
-      scope: "Sample of Annex A controls",
-      date: "2025-06-10",
-      endDate: "2025-06-12",
-      status: "planned",
-      auditor: "ABC Certification",
-      findings: "",
-      nonConformities: 0,
-      observations: 0,
-      recommendations: 0,
-    },
-    {
-      id: "3",
-      title: "Access Control Audit",
-      description: "Focused audit on access control implementation",
-      type: "internal",
-      scope: "A.9 Access Control",
-      date: "2025-03-05",
-      endDate: "2025-03-07",
-      status: "completed",
-      auditor: "Security Team",
-      findings: "Several issues identified with access review processes and privileged account management",
-      nonConformities: 2,
-      observations: 3,
-      recommendations: 4,
-    },
-    {
-      id: "4",
-      title: "Supplier Security Audit",
-      description: "Audit of key suppliers' security controls",
-      type: "external",
-      scope: "Critical suppliers",
-      date: "2025-05-20",
-      endDate: "2025-05-25",
-      status: "planned",
-      auditor: "Third-Party Risk Team",
-      findings: "",
-      nonConformities: 0,
-      observations: 0,
-      recommendations: 0,
-    },
-    {
-      id: "5",
-      title: "Physical Security Audit",
-      description: "Audit of physical security controls",
-      type: "internal",
-      scope: "A.11 Physical and Environmental Security",
-      date: "2025-02-15",
-      endDate: "2025-02-16",
-      status: "completed",
-      auditor: "Facilities Team",
-      findings: "Minor issues with visitor management and environmental controls",
-      nonConformities: 0,
-      observations: 2,
-      recommendations: 3,
-    },
-  ],
-}
+export const fetchAuditsAsync = createAsyncThunk<AuditDto[], number>(
+  'audits/fetchAll',
+  async (companyId, { rejectWithValue }) => {
+    try { return await fetchAudits(companyId); }
+    catch (e: any) { return rejectWithValue(e.message); }
+  }
+);
 
-export const auditsSlice = createSlice({
-  name: "audits",
+export const addAuditAsync = createAsyncThunk<AuditDto, AuditDto>(
+  'audits/add',
+  async (dto, { rejectWithValue }) => {
+    try { return await createAudit(dto); }
+    catch (e: any) { return rejectWithValue(e.message); }
+  }
+);
+
+export const updateAuditAsync = createAsyncThunk<AuditDto, AuditDto>(
+  'audits/update',
+  async (dto, { rejectWithValue }) => {
+    try {
+      if (!dto.id) throw new Error('Missing audit ID');
+      return await updateAuditApi(dto.id, dto);
+    } catch (e: any) {
+      return rejectWithValue(e.message);
+    }
+  }
+);
+
+export const deleteAuditAsync = createAsyncThunk<string, string>(
+  'audits/delete',
+  async (id, { rejectWithValue }) => {
+    try {
+      await deleteAuditApi(id);
+      return id;
+    } catch (e: any) {
+      return rejectWithValue(e.message);
+    }
+  }
+);
+
+const auditsSlice = createSlice({
+  name: 'audits',
   initialState,
-  reducers: {
-    addAudit: (state, action: PayloadAction<Audit>) => {
-      state.items.push(action.payload)
-    },
-    updateAudit: (state, action: PayloadAction<Audit>) => {
-      const index = state.items.findIndex((audit) => audit.id === action.payload.id)
-      if (index !== -1) {
-        state.items[index] = action.payload
-      }
-    },
-    deleteAudit: (state, action: PayloadAction<string>) => {
-      state.items = state.items.filter((audit) => audit.id !== action.payload)
-    },
-  },
-})
+  reducers: {},
+  extraReducers: builder => {
+    builder
+      .addCase(fetchAuditsAsync.pending, state => { state.loading = true; })
+      .addCase(fetchAuditsAsync.fulfilled, (state, action) => {
+        state.loading = false; state.items = action.payload;
+      })
+      .addCase(fetchAuditsAsync.rejected, (state, action) => {
+        state.loading = false; state.error = action.payload as string;
+      })
+      .addCase(addAuditAsync.fulfilled, (state, action) => {
+        state.items.push(action.payload);
+      })
+      .addCase(updateAuditAsync.fulfilled, (state, action) => {
+        const i = state.items.findIndex(a => a.id === action.payload.id);
+        if (i >= 0) state.items[i] = action.payload;
+      })
+      .addCase(deleteAuditAsync.fulfilled, (state, action) => {
+        state.items = state.items.filter(a => a.id !== action.payload);
+      });
+  }
+});
 
-export const { addAudit, updateAudit, deleteAudit } = auditsSlice.actions
-
-export default auditsSlice.reducer
-
+export default auditsSlice.reducer;

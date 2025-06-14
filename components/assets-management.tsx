@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useSelector, useDispatch } from "react-redux"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -34,40 +34,57 @@ import {
   LinkIcon,
 } from "lucide-react"
 import type { RootState } from "@/lib/store"
-import { addAsset, updateAsset, deleteAsset } from "@/lib/features/assets/assetsSlice"
+import { fetchAssets, deleteAssetAsync, addAssetAsync, updateAssetAsync } from "@/lib/features/assets/assetsSlice"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
+import { useAppDispatch, useAppSelector } from "@/lib/hooks"
+import { useToast } from "@/hooks/use-toast"
+import { AssetDto } from "@/types"
+import { fetchRisks, updateRiskAsync } from "@/lib/features/risks/risksSlice"
 
 export default function AssetsManagement() {
-  const assets = useSelector((state: RootState) => state.assets.items)
-  const risks = useSelector((state: RootState) => state.risks.items)
-  const dispatch = useDispatch()
+  const assets = useAppSelector((s) => s.assets.items);
+  const status = useAppSelector((s) => s.assets.loading);
+  const dispatch = useAppDispatch();
+
+  const risks = useSelector((state: RootState) => state.risks.items);
+
+  const getRisk = (riskId: string) => risks.find((r) => r.id === riskId);
+
+  const user = useAppSelector(state => state.auth.user)
+  const { toast } = useToast()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("all")
-  const [sortBy, setSortBy] = useState("name")
-  const [sortOrder, setSortOrder] = useState("asc")
+  const [sortBy, setSortBy] = useState<keyof typeof assets[0]>("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [activeTab, setActiveTab] = useState("list")
 
-  const [newAsset, setNewAsset] = useState({
-    id: "",
+  const initialNewAsset: Omit<AssetDto, "id"> = {
     name: "",
     description: "",
     type: "hardware",
     classification: "confidential",
-    owner: "",
+    ownerEmail: "",
     location: "",
     status: "active",
     value: "medium",
     vulnerabilities: "",
     controls: "",
-    lastReview: "",
-    relatedRisks: [] as string[],
-  })
+    lastReview: new Date().toISOString().split("T")[0],
+    relatedRisks: [],
+    companyId: 0, // will be replaced when dispatching
+  };
+
+  const [newAsset, setNewAsset] = useState(initialNewAsset);
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null)
+
+  useEffect(() => {
+    dispatch(fetchAssets());
+  }, [dispatch]);
 
   // Use useMemo for all derived state to avoid unnecessary recalculations and mutations
   const filteredAssets = useMemo(() => {
@@ -77,7 +94,7 @@ export default function AssetsManagement() {
         (asset) =>
           asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           asset.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          asset.owner.toLowerCase().includes(searchTerm.toLowerCase()),
+          asset.ownerEmail.toLowerCase().includes(searchTerm.toLowerCase()),
       )
       .filter((asset) => (filterType === "all" ? true : asset.type === filterType))
       .sort((a, b) => {
@@ -138,7 +155,9 @@ export default function AssetsManagement() {
     const asset = assets.find((a) => a.id === assetId)
     if (!asset || !asset.relatedRisks) return []
 
-    return risks.filter((risk) => asset.relatedRisks.includes(risk.id))
+    return asset
+    ? risks.filter((risk) => asset.relatedRisks.includes(risk.id))
+    : [];
   }
 
   // Get asset details
@@ -146,67 +165,71 @@ export default function AssetsManagement() {
     return assets.find((asset) => asset.id === assetId)
   }
 
-  const handleAddAsset = () => {
-    if (isEditing) {
-      dispatch(updateAsset({ ...newAsset }))
-    } else {
-      dispatch(
-        addAsset({
-          ...newAsset,
-          id: Date.now().toString(),
-          lastReview: new Date().toISOString().split("T")[0],
-        }),
-      )
-    }
-    setDialogOpen(false)
-    resetForm()
+  const handleAddAsset = async () => {
+  try {
+    console.log("[DEBUG] Starting handleAddAsset", { newAsset, isEditing, user });
+
+    if (!user?.email || !user.companyId) throw new Error("User not authenticated properly.");
+
+    const payload: Omit<AssetDto, "id"> = {
+      ...newAsset,
+      ownerEmail: user.email!,
+      companyId: user.companyId,
+      lastReview: new Date().toISOString().split("T")[0],
+    };
+
+    console.log("[DEBUG] Asset payload:", payload);
+
+    const asset = isEditing
+      ? await dispatch(updateAssetAsync(payload as AssetDto)).unwrap()
+      : await dispatch(addAssetAsync(payload)).unwrap();
+
+    console.log("[DEBUG] Asset processed:", asset);
+
+    await Promise.all(
+      asset.relatedRisks.map(async (riskId) => {
+        const existing = risks.find(r => r.id === riskId);
+        if (existing && existing.assetId !== asset.id) {
+          await dispatch(updateRiskAsync({ ...existing, assetId: asset.id })).unwrap();
+        }
+      })
+    );
+
+    await dispatch(fetchRisks(user.companyId)).unwrap();
+
+    toast({ title: "Success", description: `Asset ${isEditing ? "updated" : "created"} successfully` });
+    setDialogOpen(false);
+    resetForm();
+
+  } catch (err: any) {
+    console.error("[ERROR] handleAddAsset error:", err);
+    toast({
+      title: "Error",
+      description: err.message || "Failed to save asset.",
+      variant: "destructive",
+    });
   }
+};
+
+  const handleEdit = (asset: typeof newAsset) => {
+    setNewAsset(asset);
+    setIsEditing(true);
+    setDialogOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm("Delete this asset?")) {
+      await dispatch(deleteAssetAsync(id)).unwrap();
+    }
+  };
 
   const resetForm = () => {
     setNewAsset({
-      id: "",
-      name: "",
-      description: "",
-      type: "hardware",
-      classification: "confidential",
-      owner: "",
-      location: "",
-      status: "active",
-      value: "medium",
-      vulnerabilities: "",
-      controls: "",
-      lastReview: "",
-      relatedRisks: [],
-    })
-    setIsEditing(false)
-  }
-
-  const handleEdit = (asset: any) => {
-    // Create a completely new object with all properties
-    setNewAsset({
-      id: asset.id || "",
-      name: asset.name || "",
-      description: asset.description || "",
-      type: asset.type || "hardware",
-      classification: asset.classification || "confidential",
-      owner: asset.owner || "",
-      location: asset.location || "",
-      status: asset.status || "active",
-      value: asset.value || "medium",
-      vulnerabilities: asset.vulnerabilities || "",
-      controls: asset.controls || "",
-      lastReview: asset.lastReview || "",
-      relatedRisks: asset.relatedRisks ? [...asset.relatedRisks] : [],
-    })
-    setIsEditing(true)
-    setDialogOpen(true)
-  }
-
-  const handleDelete = (id: string) => {
-    if (window.confirm("Are you sure you want to delete this asset?")) {
-      dispatch(deleteAsset(id))
-    }
-  }
+      ...initialNewAsset,
+      lastReview: new Date().toISOString().split("T")[0],
+    });
+    setIsEditing(false);
+  };
 
   const handleRiskCheckboxChange = (riskId: string, checked: boolean) => {
     if (checked) {
@@ -382,8 +405,8 @@ export default function AssetsManagement() {
                           <Label htmlFor="owner">Asset Owner</Label>
                           <Input
                             id="owner"
-                            value={newAsset.owner}
-                            onChange={(e) => setNewAsset({ ...newAsset, owner: e.target.value })}
+                            value={newAsset.ownerEmail}
+                            onChange={(e) => setNewAsset({ ...newAsset, ownerEmail: e.target.value })}
                           />
                         </div>
                         <div>
@@ -573,7 +596,7 @@ export default function AssetsManagement() {
                         variant="ghost"
                         className="p-0 font-medium"
                         onClick={() => {
-                          setSortBy("owner")
+                          setSortBy("ownerEmail")
                           setSortOrder(sortOrder === "asc" ? "desc" : "asc")
                         }}
                       >
@@ -620,7 +643,7 @@ export default function AssetsManagement() {
                             {asset.classification.charAt(0).toUpperCase() + asset.classification.slice(1)}
                           </Badge>
                         </TableCell>
-                        <TableCell>{asset.owner}</TableCell>
+                        <TableCell>{asset.ownerEmail}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={getStatusColor(asset.status)}>
                             {asset.status.charAt(0).toUpperCase() + asset.status.slice(1)}
