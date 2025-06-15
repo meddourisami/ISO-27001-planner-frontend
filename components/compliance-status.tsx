@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useSelector } from "react-redux"
+import { useEffect, useState } from "react"
+import { useDispatch, useSelector } from "react-redux"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -10,17 +10,38 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Search, Filter, ArrowUpDown, CheckCircle2, XCircle, AlertTriangle, HelpCircle } from "lucide-react"
-import type { RootState } from "@/lib/store"
+import { AppDispatch, type RootState } from "@/lib/store"
+import { fetchControlsAsync } from "@/lib/features/compliance/complianceSlice"
+import { ControlDto } from "@types/control"
 
 export default function ComplianceStatus() {
-  const controls = useSelector((state: RootState) => state.compliance.controls)
+  const { controls, loading, error } = useSelector((state: RootState) => state.compliance);
+  const dispatch = useDispatch<AppDispatch>();
+  const user = useSelector((state: RootState) => state.auth.user)
 
   const [searchTerm, setSearchTerm] = useState("")
   const [filterClause, setFilterClause] = useState("all")
   const [sortBy, setSortBy] = useState("id")
   const [sortOrder, setSortOrder] = useState("asc")
 
-  const filteredControls = controls
+  useEffect(() => {
+  if (user?.companyId) {
+    dispatch(fetchControlsAsync(user.companyId));
+  }
+  }, [user?.companyId, dispatch]);
+  
+  const processedControls = controls.map((control) => {
+  const [idPart, ...titleParts] = control.title.split(" - ");
+  const parsedId = idPart.trim();
+  const parsedTitle = titleParts.join(" - ").trim();
+  return {
+    ...control,
+    id: parsedId,
+    title: parsedTitle || control.title, // fallback if no dash
+  };
+});
+
+  const filteredControls = processedControls
     .filter(
       (control) =>
         control.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -96,14 +117,12 @@ export default function ComplianceStatus() {
     totalControls > 0 ? Math.round(((implementedControls + partialControls * 0.5) / totalControls) * 100) : 0
 
   // Group controls by clause
-  const controlsByClause = controls.reduce((acc: any, control) => {
-    const clause = control.id.split(".")[0]
-    if (!acc[clause]) {
-      acc[clause] = []
-    }
-    acc[clause].push(control)
-    return acc
-  }, {})
+  const controlsByClause = processedControls.reduce((acc: Record<string, typeof processedControls>, control) => {
+    const clause = control.id.split(".")[0];
+    if (!acc[clause]) acc[clause] = [];
+    acc[clause].push(control);
+    return acc;
+  }, {} as Record<string, typeof processedControls>);
 
   // Calculate compliance by clause
   const clauseCompliance = Object.entries(controlsByClause)
@@ -226,20 +245,10 @@ export default function ComplianceStatus() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Clauses</SelectItem>
-                <SelectItem value="A.5">A.5 Information Security Policies</SelectItem>
-                <SelectItem value="A.6">A.6 Organization of Information Security</SelectItem>
-                <SelectItem value="A.7">A.7 Human Resource Security</SelectItem>
-                <SelectItem value="A.8">A.8 Asset Management</SelectItem>
-                <SelectItem value="A.9">A.9 Access Control</SelectItem>
-                <SelectItem value="A.10">A.10 Cryptography</SelectItem>
-                <SelectItem value="A.11">A.11 Physical and Environmental Security</SelectItem>
-                <SelectItem value="A.12">A.12 Operations Security</SelectItem>
-                <SelectItem value="A.13">A.13 Communications Security</SelectItem>
-                <SelectItem value="A.14">A.14 System Acquisition and Development</SelectItem>
-                <SelectItem value="A.15">A.15 Supplier Relationships</SelectItem>
-                <SelectItem value="A.16">A.16 Information Security Incident Management</SelectItem>
-                <SelectItem value="A.17">A.17 Business Continuity</SelectItem>
-                <SelectItem value="A.18">A.18 Compliance</SelectItem>
+                <SelectItem value="A.5">A.5 Organizational measures</SelectItem>
+                <SelectItem value="A.6">A.6 Measures related to people</SelectItem>
+                <SelectItem value="A.7">A.7 Physical measures</SelectItem>
+                <SelectItem value="A.8">A.8 Technological measures</SelectItem>
               </SelectContent>
             </Select>
             <Button

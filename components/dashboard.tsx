@@ -93,31 +93,40 @@ export default function Dashboard() {
       : null
 
     // Implementation progress by clause
-    const controlsByClause = compliance.reduce((acc: any, control) => {
-      const clause = control.id.split(".")[0]
-      if (!acc[clause]) {
-        acc[clause] = []
+    const processedControls = compliance.map((control) => {
+      const [idPart, ...titleParts] = control.title.split(" - ");
+      const parsedId = idPart.trim();
+      const parsedTitle = titleParts.join(" - ").trim();
+      return {
+        ...control,
+        id: parsedId,
+        title: parsedTitle || control.title, // fallback if no dash
+      };
+    });
+
+    const controlsByClause = processedControls.reduce((acc: Record<string, typeof processedControls>, control) => {
+      const clause = control.id.split(".")[0];
+      if (!acc[clause]) acc[clause] = [];
+      acc[clause].push(control);
+      return acc;
+    }, {} as Record<string, typeof processedControls>);
+
+  // Calculate compliance by clause
+  const clauseCompliance = Object.entries(controlsByClause)
+    .map(([clause, clauseControls]: [string, any]) => {
+      const total = clauseControls.filter((c: any) => c.status !== "not-applicable").length
+      const implemented = clauseControls.filter((c: any) => c.status === "implemented").length
+      const partial = clauseControls.filter((c: any) => c.status === "partial").length
+
+      return {
+        clause,
+        percentage: total > 0 ? Math.round(((implemented + partial * 0.5) / total) * 100) : 0,
+        total,
+        implemented,
+        partial,
       }
-      acc[clause].push(control)
-      return acc
-    }, {})
-
-    const clauseCompliance = Object.entries(controlsByClause)
-      .map(([clause, clauseControls]: [string, any]) => {
-        const total = clauseControls.filter((c: any) => c.status !== "not-applicable").length
-        const implemented = clauseControls.filter((c: any) => c.status === "implemented").length
-        const partial = clauseControls.filter((c: any) => c.status === "partial").length
-
-        return {
-          clause,
-          percentage: total > 0 ? Math.round(((implemented + partial * 0.5) / total) * 100) : 0,
-          total,
-          implemented,
-          partial,
-        }
-      })
-      .sort((a, b) => a.clause.localeCompare(b.clause, undefined, { numeric: true }))
-      .slice(0, 10) // Get first 10 clauses
+    })
+    .sort((a, b) => a.clause.localeCompare(b.clause, undefined, { numeric: true }))
 
     // Recent activities (simulated)
     const recentActivities = [

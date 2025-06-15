@@ -4,3 +4,5 @@ export * from './asset';
 export * from './document';
 export * from './audit';
 export * from './task';
+export * from './non-conformity';
+export * from './control';

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useSelector, useDispatch } from "react-redux"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -23,18 +23,24 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Progress } from "@/components/ui/progress"
 import { Plus, Search, Filter, ArrowUpDown, AlertTriangle, CheckCircle2, Clock, AlertCircle } from "lucide-react"
-import type { RootState } from "@/lib/store"
+import { AppDispatch, type RootState } from "@/lib/store"
 import {
-  addNonConformity,
-  updateNonConformity,
-  deleteNonConformity,
+  fetchNonConformitiesAsync,
+  updateNonConformityAsync,
+  addNonConformityAsync,
+  deleteNonConformityAsync,
 } from "@/lib/features/nonconformities/nonconformitiesSlice"
+import { useToast } from "@/hooks/use-toast"
+import { NonConformityDto } from "@/types"
 
 export default function NonConformitiesManagement() {
-  const nonconformities = useSelector((state: RootState) => state.nonconformities.items)
+  const { items: nonconformities, loading, error } = useSelector((state: RootState) => state.nonconformities)
   const controls = useSelector((state: RootState) => state.compliance.controls)
   const risks = useSelector((state: RootState) => state.risks.items)
-  const dispatch = useDispatch()
+  const user = useSelector((state: RootState) => state.auth.user)
+  const dispatch = useDispatch<AppDispatch>()
+
+  const { toast } = useToast()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -66,6 +72,16 @@ export default function NonConformitiesManagement() {
     verifiedBy: "",
     comments: "",
   })
+
+  useEffect(() => {
+    if (user?.companyId) {
+      dispatch(fetchNonConformitiesAsync(user.companyId))
+        .unwrap()
+        .catch((e: any) =>
+          toast({ title: 'Error loading', description: e.message, variant: 'destructive' })
+        )
+    }
+  }, [user, dispatch])
 
   // Filter nonconformities based on search, status, and severity
   const filteredNonConformities = nonconformities.filter((item) => {
@@ -160,54 +176,68 @@ export default function NonConformitiesManagement() {
     })
   }
 
-  const handleAddNonConformity = () => {
-    if (isEditing) {
-      dispatch(
-        updateNonConformity({
-          id: selectedNonConformity!,
-          ...newNonConformity,
-        }),
-      )
-    } else {
-      dispatch(addNonConformity(newNonConformity))
+  const handleAddNonConformity = async () => {
+    if (!user?.companyId) {
+      return toast({ title: 'No company', description: 'No company to assign', variant: 'destructive' })
     }
-    setDialogOpen(false)
-    resetForm()
-    setIsEditing(false)
-    setSelectedNonConformity(null)
+    const dto: NonConformityDto = {
+      ...newNonConformity,
+      id: isEditing ? selectedNonConformity! : undefined,
+      companyId: user.companyId,
+    }
+    try {
+      if (isEditing) {
+        await dispatch(updateNonConformityAsync(dto)).unwrap()
+        toast({ title: 'Updated', description: 'Non‑conformity updated' })
+      } else {
+        await dispatch(addNonConformityAsync(dto)).unwrap()
+        toast({ title: 'Added', description: 'Non‑conformity added' })
+      }
+      setDialogOpen(false)
+      setIsEditing(false)
+      setSelectedNonConformity(null)
+      setNewNonConformity(newNonConformity)
+    } catch (e: any) {
+      toast({ title: 'Save error', description: e.message, variant: 'destructive' })
+    }
   }
 
   const handleEditNonConformity = (id: string) => {
-    const nonconformity = nonconformities.find((item) => item.id === id)
-    if (nonconformity) {
-      setNewNonConformity({
-        title: nonconformity.title,
-        description: nonconformity.description,
-        source: nonconformity.source,
-        sourceReference: nonconformity.sourceReference,
-        dateIdentified: nonconformity.dateIdentified,
-        severity: nonconformity.severity,
-        status: nonconformity.status,
-        owner: nonconformity.owner,
-        dueDate: nonconformity.dueDate,
-        relatedControls: [...nonconformity.relatedControls],
-        relatedRisks: [...nonconformity.relatedRisks],
-        correctiveActions: nonconformity.correctiveActions,
-        evidence: nonconformity.evidence,
-        verificationStatus: nonconformity.verificationStatus,
-        verificationDate: nonconformity.verificationDate || "",
-        verifiedBy: nonconformity.verifiedBy || "",
-        comments: nonconformity.comments || "",
-      })
-      setIsEditing(true)
-      setSelectedNonConformity(id)
-      setDialogOpen(true)
-    }
+  const item = nonconformities.find((i) => i.id === id);
+  if (item) {
+    setNewNonConformity({
+      title: item.title,
+      description: item.description,
+      source: item.source,
+      sourceReference: item.sourceReference,
+      dateIdentified: item.dateIdentified,
+      severity: item.severity,
+      status: item.status,
+      owner: item.owner,
+      dueDate: item.dueDate,
+      relatedControls: item.relatedControls ?? [],
+      relatedRisks: item.relatedRisks ?? [],
+      correctiveActions: item.correctiveActions,
+      evidence: item.evidence,
+      verificationStatus: item.verificationStatus,
+      verificationDate: item.verificationDate ?? '',
+      verifiedBy: item.verifiedBy ?? '',
+      comments: item.comments ?? '',
+    });
+    setSelectedNonConformity(id);
+    setIsEditing(true);
+    setDialogOpen(true);
   }
+};
 
-  const handleDeleteNonConformity = (id: string) => {
-    if (window.confirm("Are you sure you want to delete this non-conformity?")) {
-      dispatch(deleteNonConformity(id))
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this non‑conformity?')) return
+    try {
+      await dispatch(deleteNonConformityAsync(id)).unwrap()
+      toast({ title: 'Deleted' })
+    } catch (e: any) {
+      toast({ title: 'Delete error', description: e.message, variant: 'destructive' })
     }
   }
 
@@ -765,7 +795,7 @@ export default function NonConformitiesManagement() {
                               variant="ghost"
                               size="sm"
                               className="text-red-500"
-                              onClick={() => handleDeleteNonConformity(item.id)}
+                              onClick={() => handleDelete(item.id)}
                             >
                               Delete
                             </Button>
@@ -904,7 +934,7 @@ export default function NonConformitiesManagement() {
                       <div key={controlId} className="space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="font-medium">
-                            {controlId} - {control ? control.title.substring(0, 30) + "..." : "Unknown Control"}
+                            {control ? control.title.substring(0, 30) + "..." : "Unknown Control"}
                           </span>
                           <span className="text-sm">{count}</span>
                         </div>

@@ -1,4 +1,4 @@
-import { AssetDto, AuditDto, DocumentDto, DocumentVersionDto, RiskDto, TaskDto, User } from "@/types";
+import { AssetDto, AuditDto, ControlDto, DocumentDto, DocumentVersionDto, NonConformityDto, RiskDto, TaskDto, User } from "@/types";
 import api from "../lib/axios";
 
 
@@ -167,4 +167,36 @@ export async function updateTaskApi(id: string, dto: TaskDto): Promise<TaskDto> 
 }
 export async function deleteTaskApi(id: string): Promise<void> {
   await api.delete(`/tasks/${id}`);
+}
+
+// Non conformities API endpoints
+
+export async function fetchNonConformities(companyId: number): Promise<NonConformityDto[]> {
+  return (await api.get(`/nonconformities/company/${companyId}`)).data;
+}
+
+export async function createNonConformity(dto: NonConformityDto): Promise<NonConformityDto> {
+  return (await api.post('/nonconformities', dto)).data;
+}
+
+export async function updateNonConformityApi(id: string, dto: NonConformityDto): Promise<NonConformityDto> {
+  return (await api.put(`/nonconformities/${id}`, dto)).data;
+}
+
+export async function deleteNonConformityApi(id: string): Promise<void> {
+  await api.delete(`/nonconformities/${id}`);
+}
+
+// Controls API endpoints
+
+export async function fetchControlsByCompany(companyId: number): Promise<ControlDto[]> {
+  return (await api.get(`/controls/company/${companyId}`)).data;
+}
+
+export async function updateControlStatusApi(
+  id: string,
+  status: string,
+  evidence: string
+): Promise<ControlDto> {
+  return (await api.put(`/controls/${id}`, { status, evidence })).data;
 }
