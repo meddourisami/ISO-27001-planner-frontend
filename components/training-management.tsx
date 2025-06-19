@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useSelector, useDispatch } from "react-redux"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -32,18 +32,27 @@ import {
   CheckCircle2,
   XCircle,
 } from "lucide-react"
-import type { RootState } from "@/lib/store"
+import { AppDispatch, type RootState } from "@/lib/store"
 import {
-  addTraining,
-  updateTraining,
-  deleteTraining,
-  updateEmployeeCompletion,
+  fetchTrainingsAsync,
+  fetchEmployeesAsync,
+  updateTrainingAsync,
+  addTrainingAsync,
+  deleteTrainingAsync,
+  updateEmployeeAsync,
+  addEmployeeAsync,
+  assignEmployeeAsync,
+  markCompletedAsync,
+  deleteEmployeeAsync,
 } from "@/lib/features/training/trainingSlice"
 
 export default function TrainingManagement() {
   const trainings = useSelector((state: RootState) => state.training.items)
   const employees = useSelector((state: RootState) => state.training.employees)
-  const dispatch = useDispatch()
+  const dispatch = useDispatch<AppDispatch>()
+  const user = useSelector((state: RootState) => state.auth.user)
+
+  const { toast } = useToast()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -69,65 +78,101 @@ export default function TrainingManagement() {
   const [isEditing, setIsEditing] = useState(false)
   const [selectedTraining, setSelectedTraining] = useState<string | null>(null)
 
-  const handleAddTraining = () => {
+  const [empDialog, setEmpDialog] = useState(false);
+  const [isEmpEditing, setIsEmpEditing] = useState(false);
+  const [empForm, setEmpForm] = useState<Omit<EmployeeDto, 'id' | 'companyId'>>({
+    name: '', department: '', email: '', completedTrainings: []
+  });
+  const [selectedEmp, setSelectedEmp] = useState<EmployeeDto | null>(null);
+
+  const [empSearchTerm, setEmpSearchTerm] = useState("");
+  const [empSortBy, setEmpSortBy] = useState("name");
+  const [empSortOrder, setEmpSortOrder] = useState<"asc" | "desc">("asc");
+  const [empFilterDept, setEmpFilterDept] = useState("all");
+
+  const [assigningEmpId, setAssigningEmpId] = useState<string | null>(null);
+  const [selectedAssignTrainingId, setSelectedAssignTrainingId] = useState<string | null>(null);
+
+  useEffect(() => {
+  if (!user?.companyId) return;
+
+    dispatch(fetchTrainingsAsync(user.companyId));
+    dispatch(fetchEmployeesAsync(user.companyId));
+  }, [dispatch, user?.companyId, trainings.length]);
+
+  const handleAddTraining = async () => {
+  if (!user?.companyId) {
+    toast({ title: "Error", description: "User not identified or missing company.", variant: "destructive" });
+    return;
+  }
+    
+  const dto: TrainingDto = {
+    ...newTraining,
+    companyId: user.companyId,
+  };
+
+  try {
     if (isEditing) {
-      dispatch(updateTraining({ ...newTraining }))
+      await dispatch(updateTrainingAsync(dto)).unwrap();
+      toast({ title: "Training Updated", description: `Training "${dto.title}" has been updated.` });
     } else {
-      dispatch(
-        addTraining({
-          ...newTraining,
-          id: Date.now().toString(),
-        }),
-      )
+      const createDto: Omit<TrainingDto, 'id'> = {
+        ...newTraining,
+        companyId: user.companyId,
+      };
+      await dispatch(addTrainingAsync(createDto)).unwrap();
+      toast({ title: "Training Added", description: `Training "${dto.title}" has been added.` });
     }
-    setDialogOpen(false)
-    resetForm()
+    setDialogOpen(false);
+    resetForm();
+  } catch (error: any) {
+    console.error(error);
+    toast({ title: "Error", description: error.message || "Something went wrong.", variant: "destructive" });
   }
+};
 
-  const resetForm = () => {
-    setNewTraining({
-      id: "",
-      title: "",
-      description: "",
-      type: "security-awareness",
-      status: "scheduled",
-      startDate: "",
-      endDate: "",
-      duration: 60,
-      instructor: "",
-      materials: "",
-      requiredFor: [],
-    })
-    setIsEditing(false)
-  }
+const resetForm = () => {
+  setNewTraining({
+    id: "",
+    title: "",
+    description: "",
+    type: "security-awareness",
+    status: "scheduled",
+    startDate: "",
+    endDate: "",
+    duration: 60,
+    instructor: "",
+    materials: "",
+    requiredFor: [],
+  });
+  setIsEditing(false);
+};
 
-  const handleEdit = (training: any) => {
-    setNewTraining({
-      id: training.id,
-      title: training.title,
-      description: training.description,
-      type: training.type,
-      status: training.status,
-      startDate: training.startDate,
-      endDate: training.endDate,
-      duration: training.duration,
-      instructor: training.instructor,
-      materials: training.materials,
-      requiredFor: [...training.requiredFor],
-    })
-    setIsEditing(true)
-    setDialogOpen(true)
-  }
+const handleEdit = (training: TrainingDto) => {
+  const { companyId, ...rest } = training;
+  setNewTraining({ ...rest, requiredFor: [...training.requiredFor] });
+  setIsEditing(true);
+  setDialogOpen(true);
+};
 
-  const handleDelete = (id: string) => {
-    if (window.confirm("Are you sure you want to delete this training?")) {
-      dispatch(deleteTraining(id))
-    }
+const handleDelete = (id: string) => {
+  if (window.confirm("Are you sure you want to delete this training?")) {
+    dispatch(deleteTrainingAsync(id));
+    toast({ title: "Training Deleted", description: "The training has been removed." });
   }
+};
 
-  const handleEmployeeCompletion = (trainingId: string, employeeId: string, completed: boolean) => {
-    dispatch(updateEmployeeCompletion({ trainingId, employeeId, completed }))
+const onMarkCompleted = async (trainingId: string, employeeId: string, completed: boolean) => {
+  try {
+    await dispatch(markCompletedAsync({ trainingId, employeeId })).unwrap();
+    toast({
+      title: completed ? "Completed!" : "Marked incomplete",
+      description: `Employee ${employeeId} → ${completed ? "done" : "undone"}`,
+    });
+  } catch (e: any) {
+    toast({ title: "Error", description: e.message, variant: "destructive" });
   }
+};
 
   const handleDepartmentCheckboxChange = (department: string, checked: boolean) => {
     if (checked) {
@@ -152,8 +197,8 @@ export default function TrainingManagement() {
   const filteredTrainings = trainings
     .filter(
       (training) =>
-        training.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        training.description.toLowerCase().includes(searchTerm.toLowerCase()),
+        (training.title?.toLowerCase() ?? '').includes(searchTerm.toLowerCase()) ||
+      (training.description?.toLowerCase() ?? '').includes(searchTerm.toLowerCase())
     )
     .filter((training) => (filterStatus === "all" ? true : training.status === filterStatus))
     .sort((a, b) => {
@@ -208,6 +253,8 @@ export default function TrainingManagement() {
     }
   })
 
+
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "scheduled":
@@ -237,6 +284,96 @@ export default function TrainingManagement() {
         return <GraduationCap className="h-4 w-4" />
     }
   }
+
+  const handleSaveEmployee = async () => {
+    if (!user?.companyId) return toast({ title: 'Error', description: 'User not authorized' });
+    try {
+      if (isEmpEditing && selectedEmp?.id) {
+        await dispatch(updateEmployeeAsync({ ...empForm, id: selectedEmp.id, companyId: user.companyId })).unwrap();
+        toast({ title: 'Employee Updated' });
+      } else {
+        await dispatch(addEmployeeAsync({ ...empForm, companyId: user.companyId })).unwrap();
+        toast({ title: 'Employee Added' });
+      }
+      setEmpDialog(false);
+      resetEmployeeForm();
+      setIsEmpEditing(false);
+    } catch (e: any) {
+      toast({ title: 'Error', description: e });
+    }
+  };
+
+  const editEmp = (emp: EmployeeDto) => {
+  setEmpForm({
+    name: emp.name,
+    department: emp.department,
+    email: emp.email,
+    completedTrainings: [...emp.completedTrainings],
+  });
+  setSelectedEmp(emp);
+  setIsEmpEditing(true);
+  setEmpDialog(true);
+};
+
+  const resetEmployeeForm = () => {
+  setIsEditing(false);
+  setEmpForm({
+    name: "",
+    email: "",
+    department: "",
+    completedTrainings: [],
+  });
+  setSelectedEmp(null);
+  };
+
+  const deleteEmp = async (id: string) => {
+    if (window.confirm("Are you sure you want to delete this employee?")) {
+      try {
+        await dispatch(deleteEmployeeAsync(id)).unwrap();
+        toast({ title: "Employee Deleted" });
+      } catch (e: any) {
+        toast({ title: "Error", description: e.message });
+      }
+    }
+  };
+  
+  const handleConfirmAssign = async () => {
+  if (assigningEmpId && selectedAssignTrainingId) {
+    try {
+      await dispatch(assignEmployeeAsync({
+        trainingId: selectedAssignTrainingId,
+        employeeId: assigningEmpId,
+      })).unwrap();
+      toast({ title: "Employee assigned to training" });
+      setAssigningEmpId(null);
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  }
+  };
+  
+  const onClickAssign = (empId: string) => {
+    setAssigningEmpId(empId);
+    setSelectedAssignTrainingId(null);
+  };
+
+  const filteredEmployees = employees
+  .filter(emp =>
+    emp.name.toLowerCase().includes(empSearchTerm.toLowerCase()) ||
+    emp.email.toLowerCase().includes(empSearchTerm.toLowerCase()) ||
+    emp.department.toLowerCase().includes(empSearchTerm.toLowerCase())
+  )
+  .filter(emp => empFilterDept === "all" || emp.department === empFilterDept)
+  .sort((a, b) => {
+    const valA = a[empSortBy as keyof typeof a];
+    const valB = b[empSortBy as keyof typeof b];
+    if (typeof valA === "string" && typeof valB === "string") {
+      return empSortOrder === "asc"
+        ? valA.localeCompare(valB)
+        : valB.localeCompare(valA);
+    }
+    return 0;
+  });
 
   return (
     <div className="space-y-4">
@@ -545,12 +682,14 @@ export default function TrainingManagement() {
                     filteredTrainings.map((training) => {
                       // Calculate completion rate for this training
                       const requiredEmployees = training.requiredFor.length
+                      console.log(requiredEmployees,"required employees")
                       const completedEmployees = employees.filter((emp) =>
-                        emp.completedTrainings.includes(training.id),
+                        emp.completedTrainings.includes(training.title),
                       ).length
-
+                      console.log(completedEmployees,"completed employees")
                       const completionRate =
                         requiredEmployees > 0 ? Math.round((completedEmployees / requiredEmployees) * 100) : 0
+                      console.log(completionRate, "completion rate")
 
                       return (
                         <TableRow key={training.id} className={selectedTraining === training.id ? "bg-accent" : ""}>
@@ -560,7 +699,9 @@ export default function TrainingManagement() {
                               <span>{training.title}</span>
                             </div>
                           </TableCell>
-                          <TableCell className="capitalize">{training.type.replace("-", " ")}</TableCell>
+                          <TableCell className="capitalize">
+                            {(training.type ?? "").replace("-", " ")}
+                          </TableCell>
                           <TableCell>
                             {training.startDate && (
                               <div className="flex flex-col">
@@ -641,8 +782,7 @@ export default function TrainingManagement() {
                           </TableHeader>
                           <TableBody>
                             {requiredEmployees.map((employee) => {
-                              const completed = employee.completedTrainings.includes(selectedTraining)
-
+                              const completed = employee.completedTrainings.includes(training.title)
                               return (
                                 <TableRow key={employee.id}>
                                   <TableCell>{employee.name}</TableCell>
@@ -662,13 +802,17 @@ export default function TrainingManagement() {
                                   </TableCell>
                                   <TableCell>
                                     <Button
-                                      variant="outline"
                                       size="sm"
+                                      variant={employee.completedTrainings.includes(training.title) ? "default" : "outline"}
                                       onClick={() =>
-                                        handleEmployeeCompletion(selectedTraining, employee.id, !completed)
+                                        onMarkCompleted(
+                                          selectedTraining,
+                                          employee.id,
+                                          !employee.completedTrainings.includes(training.title)
+                                        )
                                       }
                                     >
-                                      {completed ? "Mark Incomplete" : "Mark Complete"}
+                                      {employee.completedTrainings.includes(training.title) ? "Mark Incomplete" : "Mark Complete"}
                                     </Button>
                                   </TableCell>
                                 </TableRow>
@@ -688,6 +832,167 @@ export default function TrainingManagement() {
               </div>
             </CardFooter>
           </Card>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Employee Management</CardTitle>
+                  <CardDescription>Manage staff and training assignments</CardDescription>
+                </div>
+                <Dialog open={empDialog} onOpenChange={setEmpDialog}>
+                  <DialogTrigger asChild>
+                    <Button><Plus className="mr-2 h-4 w-4" />Add Employee</Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
+                    <DialogHeader className="sticky top-0 bg-white z-10">
+                      <DialogTitle>{isEditing ? "Edit Employee" : "Add New Employee"}</DialogTitle>
+                      <DialogDescription>
+                        {isEditing
+                          ? "Update the employee's details below"
+                          : "Fill in the details to add a new employee"}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex-grow overflow-y-auto px-4">
+                      <div className="grid gap-4 py-4 grid-cols-2">
+                        <div className="col-span-2">
+                          <Label htmlFor="name">Full Name</Label>
+                          <Input
+                            id="name"
+                            value={empForm.name}
+                            onChange={(e) => setEmpForm({ ...empForm, name: e.target.value })}
+                            placeholder="Name"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Label htmlFor="email">Email Address</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            value={empForm.email}
+                            onChange={(e) => setEmpForm({ ...empForm, email: e.target.value })}
+                            placeholder="name@example.com"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Label htmlFor="department">Department</Label>
+                          <Input
+                            id="department"
+                            value={empForm.department}
+                            onChange={(e) => setEmpForm({ ...empForm, department: e.target.value })}
+                            placeholder="eg- IT, HR, Finance"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter className="bottom-0 bg-white z-10 pt-4">
+                      <Button variant="outline" onClick={() => {
+                        setEmpDialog(false);
+                        resetEmpForm();
+                      }}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleSaveEmployee}>
+                        {isEditing ? "Update Employee" : "Add Employee"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </CardHeader>
+                    
+            <CardContent>
+              <div className="flex items-center space-x-2 mb-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search employees..."
+                    className="pl-8"
+                    value={empSearchTerm}
+                    onChange={(e) => setEmpSearchTerm(e.target.value)}
+                  />
+                </div>
+                <Select value={empFilterDept} onValueChange={setEmpFilterDept}>
+                  <SelectTrigger className="w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Filter by department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Departments</SelectItem>
+                    {[...new Set(employees.map(emp => emp.department))].map(dept => (
+                      <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  onClick={() => setEmpSortOrder(empSortOrder === "asc" ? "desc" : "asc")}
+                >
+                  <ArrowUpDown className="mr-2 h-4 w-4" />
+                  {empSortOrder === "asc" ? "Ascending" : "Descending"}
+                </Button>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Completed Trainings</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredEmployees.map(emp => (
+                    <TableRow key={emp.id}>
+                      <TableCell>{emp.name}</TableCell>
+                      <TableCell>{emp.department}</TableCell>
+                      <TableCell>{emp.email}</TableCell>
+                      <TableCell>{emp.completedTrainings}</TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <Button size="sm" variant="ghost" onClick={() => editEmp(emp)}>Edit</Button>
+                        <Button size="sm" variant="destructive" onClick={() => deleteEmp(emp.id)}>Delete</Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onClickAssign(emp.id)}
+                        >
+                          Assign
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {assigningEmpId && (
+                <Card className="p-4 mb-4 bg-gray-50 border-gray-200 text-center">
+                  <div className="flex justify-center items-center space-x-2">
+                    <span className="font-medium">Assign to Training:</span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline">{selectedAssignTrainingId 
+                          ? trainings.find(t => t.id === selectedAssignTrainingId )?.title
+                          : "Select Training…"}</Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent style={{ maxHeight: 200, overflowY: "auto" }}>
+                        {trainings.map((t) => (
+                          <DropdownMenuItem key={t.id} onSelect={() => setSelectedAssignTrainingId (t.id)}>
+                            {t.title}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button size="sm" onClick={handleConfirmAssign} disabled={!selectedAssignTrainingId }>
+                      Confirm
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setAssigningEmpId(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </Card>
+              )}
+            </CardContent>
+          </Card>
+            
         </TabsContent>
 
         <TabsContent value="dashboard" className="space-y-4">
@@ -849,4 +1154,8 @@ export default function TrainingManagement() {
 
 // Missing imports
 import { Shield, Mail, CheckSquare } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { EmployeeDto, TrainingDto } from "@/types"
+import { Checkbox } from "./ui/checkbox"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSubContent, DropdownMenuTrigger } from "./ui/dropdown-menu"
 

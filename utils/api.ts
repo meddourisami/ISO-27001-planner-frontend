@@ -1,4 +1,4 @@
-import { AssetDto, AuditDto, ControlDto, DocumentDto, DocumentVersionDto, NonConformityDto, RiskDto, TaskDto, User } from "@/types";
+import { AssetDto, AuditDto, ControlDto, DocumentDto, DocumentVersionDto, EmployeeDto, NonConformityDto, RiskDto, TaskDto, TrainingDto, User } from "@/types";
 import api from "../lib/axios";
 
 
@@ -105,7 +105,7 @@ export async function deleteAssetApi(id: string): Promise<void> {
 // document API endpoints
 
 export async function fetchDocuments(companyId: number): Promise<DocumentDto[]> {
-  return (await api.get(`/companies/${companyId}/documents`)).data;
+  return (await api.get(`/documents/${companyId}`)).data;
 }
 
 export async function createDocumentWithFile(dto: DocumentDto, file: File): Promise<DocumentDto> {
@@ -199,4 +199,114 @@ export async function updateControlStatusApi(
   evidence: string
 ): Promise<ControlDto> {
   return (await api.put(`/controls/${id}`, { status, evidence })).data;
+}
+
+// Employee and training API endpoints
+
+export async function fetchTrainings(companyId: number): Promise<TrainingDto[]> {
+  return (await api.get(`/trainings/company/${companyId}`)).data;
+}
+
+export async function createTraining(dto: TrainingDto): Promise<TrainingDto> {
+  const { companyId, ...payload } = dto;
+  return (
+    await api.post(`/trainings/create`, payload, {
+      params: { companyId },
+    })
+  ).data;
+}
+
+export async function updateTrainingBackend(id: string, dto: TrainingDto): Promise<TrainingDto> {
+  return (await api.put(`/trainings/${id}`, dto)).data;
+}
+
+export async function deleteTrainingBackend(id: string): Promise<void> {
+  await api.delete(`/trainings/${id}`);
+}
+
+export async function fetchEmployees(companyId: number): Promise<EmployeeDto[]> {
+  return (await api.get(`/employees/company/${companyId}`)).data;
+}
+
+export async function createEmployee(dto: EmployeeDto): Promise<EmployeeDto> {
+  const { companyId, ...payload } = dto;
+  return (
+    await api.post(`/employees`, payload, {
+      params: { companyId },
+    })
+  ).data;
+}
+
+export async function updateEmployeeBackend(id: string, dto: EmployeeDto): Promise<EmployeeDto> {
+  return (await api.put(`/employees/${id}`, dto)).data;
+}
+
+export async function deleteEmployeeBackend(id: string): Promise<void> {
+  await api.delete(`/employees/${id}`);
+}
+
+export async function assignEmployeeToTraining(
+  trainingId: string,
+  employeeId: string
+): Promise<string> {
+  const res = await api.post(
+    `/trainings/${trainingId}/assign/${employeeId}`
+  );
+  return res.data;
+}
+
+export async function markTrainingCompleted(employeeId: string, trainingId: string): Promise<void> {
+  return await api.post(`/employees/${employeeId}/complete-training/${trainingId}`);
+}
+
+// Reports API endpoints
+
+//Risk reports API endpoints
+export async function riskReportExportCsv(companyId: number): Promise<Blob> {
+  const res = await api.get(`/risks/export/csv/${companyId}`, { responseType: 'blob' });
+  return res.data;
+}
+
+export async function riskReportExportPdf(companyId: number): Promise<Blob> {
+  const res = await api.get(`/risks/export/pdf/${companyId}`, { responseType: 'blob' });
+  return res.data;
+}
+
+export async function riskReportExportPdfTable(companyId: number): Promise<Blob> {
+  const res = await api.get(`/risks/export/pdf-table/${companyId}`, { responseType: 'blob' });
+  return res.data;
+}
+
+//Asset reports API endpoints
+
+export async function assetReportExportCsv(companyId: number): Promise<Blob> {
+  const res = await api.get(`/assets/export/csv/${companyId}`, { responseType: 'blob' });
+  return res.data;
+}
+
+export async function assetReportExportPdf(companyId: number): Promise<Blob> {
+  const res = await api.get(`/assets/export/pdf/${companyId}`, { responseType: 'blob' });
+  return res.data;
+}
+
+export async function assetReportExportPdfTable(companyId: number): Promise<Blob> {
+  const res = await api.get(`/assets/export/pdf-table/${companyId}`, { responseType: 'blob' });
+  return res.data;
+}
+
+// Audit logs reports API endpoints
+
+export async function exportCsv(companyId: number): Promise<Blob> {
+  const res = await api.get(`/audit-logs/export/csv/${companyId}`, { responseType: 'blob' });
+  return res.data;
+}
+
+export async function exportPdf(companyId: number): Promise<Blob> {
+  const res = await api.get(`/audit-logs/export/pdf/${companyId}`, { responseType: 'blob' });
+  return res.data;
+}
+
+export async function exportPdfTable(companyId: number): Promise<Blob> {
+  const res = await api.get(`/audit-logs/export/pdf-table/${companyId}`, { responseType: 'blob' });
+  return res.data;
 }

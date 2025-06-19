@@ -16,6 +16,7 @@ import { fetchAuditsAsync } from "@/lib/features/audits/auditsSlice"
 import { fetchTasksAsync } from "@/lib/features/tasks/tasksSlice"
 import { fetchNonConformitiesAsync } from "@/lib/features/nonconformities/nonconformitiesSlice"
 import { fetchControlsAsync } from "@/lib/features/compliance/complianceSlice"
+import { fetchEmployeesAsync, fetchTrainingsAsync } from "@/lib/features/training/trainingSlice"
 
 export default function Home() {
   useAuthTokenRefresh()
@@ -42,6 +43,8 @@ export default function Home() {
       dispatch(fetchTasksAsync(user.companyId))
       dispatch(fetchNonConformitiesAsync(user.companyId))
       dispatch(fetchControlsAsync(user.companyId))
+      dispatch(fetchEmployeesAsync(user.companyId))
+      dispatch(fetchTrainingsAsync(user.companyId))
     }
   }, [dispatch, user?.companyId])
 

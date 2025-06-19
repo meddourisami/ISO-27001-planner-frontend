@@ -561,7 +561,7 @@ export default function NonConformitiesManagement() {
                                     onCheckedChange={(checked) => handleControlChange(control.id, checked as boolean)}
                                   />
                                   <Label htmlFor={`control-${control.id}`} className="text-sm">
-                                    {control.id} - {control.title.substring(0, 30)}
+                                    {control.title.substring(0, 30)}
                                     {control.title.length > 30 ? "..." : ""}
                                   </Label>
                                 </div>
