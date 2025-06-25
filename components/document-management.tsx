@@ -20,8 +20,8 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Search, Filter, ArrowUpDown, FileText, Download, Eye, EditIcon } from "lucide-react"
-import type { RootState } from "@/lib/store"
-import { addDocument, createDocumentAsync, fetchDocumentsAsync, fetchVersionHistoryAsync, updateDocument } from "@/lib/features/documents/documentsSlice"
+import { AppDispatch, type RootState } from "@/lib/store"
+import { createDocumentAsync, fetchDocumentsAsync, fetchVersionHistoryAsync, updateDocumentAsync, uploadDocumentVersionAsync } from "@/lib/features/documents/documentsSlice"
 import { downloadVersion } from "@utils/api"
 import { useToast } from "@/hooks/use-toast"
 import { DocumentDto } from "@/types"
@@ -29,7 +29,7 @@ import { useDropzone } from "react-dropzone";
 
 
 export default function DocumentManagement() {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const documents = useSelector((state: RootState) => state.documents.items);
   const versionHistory = useSelector((state: RootState) => state.documents.versions);
   const user = useSelector((s: RootState) => s.auth.user);
@@ -58,12 +58,24 @@ export default function DocumentManagement() {
   const [currentDocId, setCurrentDocId] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
 
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
   useEffect(() => {
-    dispatch(fetchDocumentsAsync());
-  }, [dispatch]);
+    if (user?.companyId) {
+      dispatch(fetchDocumentsAsync(user?.companyId));
+    }
+  }, [dispatch, user?.companyId]);
+
+  useEffect(() => {
+    // Prefetch versions for all documents once
+    documents.forEach(doc => {
+      dispatch(fetchVersionHistoryAsync(doc.id));
+    });
+  }, [dispatch, documents]);
 
   const handleAddDocument = async () => {
-    if (!user?.companyId) return toast({ title: "Error", description: "Missing company." });
+    if (!user?.companyId) return toast({ title: "Error", description: "Missing company.", variant: "destructive" });
 
     const dto: Omit<DocumentDto, "id"> = {
       ...newDocument,
@@ -72,9 +84,12 @@ export default function DocumentManagement() {
 
     try {
       if (isEditing && currentDocId) {
-        if (file) {
-          await dispatch(uploadNewVersionAsync({ id: currentDocId, version: newDocument.version, file })).unwrap();
+        if (!file) {
+          return toast({ title: "Error", description: "Please select a file to upload a new version.", variant: "destructive" });
         }
+        // Dispatch version upload
+        console.log("Uploading version:", currentDocId, file);
+        await dispatch(updateDocumentAsync({ id: currentDocId, dto, file })).unwrap();
       } else {
         await dispatch(createDocumentAsync({ dto, file })).unwrap();
       }
@@ -82,7 +97,8 @@ export default function DocumentManagement() {
       setDialogOpen(false);
       resetForm();
     } catch (err: any) {
-      toast({ title: "Error", description: err || err.message, variant: "destructive" });
+      toast({ title: "Error", description: err || err.message || "something went wrong", variant: "destructive" });
+      console.log(err?.data?.message, err?.message, err.response?.data)
     }
   };
 
@@ -105,16 +121,70 @@ export default function DocumentManagement() {
   };
 
 
-  const handleEdit = (document: any) => {
-    setNewDocument(document)
-    setIsEditing(true)
-    setDialogOpen(true)
-  }
+  const handleEdit = (doc: DocumentDto) => {
+    setNewDocument({
+      title: doc.title,
+      description: doc.description,
+      type: doc.type,
+      status: doc.status,
+      version: doc.version,
+      ownerEmail: doc.ownerEmail,
+      approverEmail: doc.approverEmail,
+      approvalDate: doc.approvalDate ?? "",
+      reviewDate: doc.reviewDate ?? "",
+      content: doc.content ?? "",
+    });
+    setFile(null);              // clear old file
+    setIsEditing(true);
+    setCurrentDocId(doc.id!);
+    setDialogOpen(true);
+  };
 
   const { getRootProps, getInputProps } = useDropzone({
     multiple: false,
     onDrop: files => files.length && setFile(files[0]),
   });
+
+  const openDocumentPreview = async (docId: string, isDownload = false) => {
+    try {
+      await dispatch(fetchVersionHistoryAsync(docId)).unwrap();
+
+      const versions = versionHistory[docId] || [];
+      if (!versions || versions.length === 0) throw new Error("No versions available.");
+
+      const latest = versions
+        .slice()
+        .sort((a, b) => parseFloat(b.version) - parseFloat(a.version))[0];
+
+      const blob = await downloadVersion(latest.id);
+      const url = window.URL.createObjectURL(blob);
+
+      if (isDownload) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = latest.fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } else {
+        setCurrentDocId(docId);
+        setPreviewUrl(url);
+        setIsPreviewOpen(true);
+      }
+    } catch (e: any) {
+      toast({
+        title: "Error",
+        variant: "destructive",
+        description: e.message || "Unable to open document.",
+      });
+    }
+  };
+
+  const handleDownload = (docId: string) =>
+    openDocumentPreview(docId, true);
+
+  const handleView = (docId: string) =>
+    openDocumentPreview(docId, false);
 
   const filteredDocuments = documents
     .filter(
@@ -133,8 +203,8 @@ export default function DocumentManagement() {
 
       return 0
     })
-  
-  
+
+
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -174,108 +244,108 @@ export default function DocumentManagement() {
 
                 <div className="flex-1 overflow-y-auto space-y-4 py-2">
                   <div className="grid gap-4 py-4">
-                  {/* Form fields */}
-                  <div>
-                    <Label htmlFor="title">Title</Label>
-                    <Input id="title" value={newDocument.title} onChange={e => setNewDocument({ ...newDocument, title: e.target.value })} />
-                  </div>
-                  <div>
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea id="description" value={newDocument.description} onChange={e => setNewDocument({ ...newDocument, description: e.target.value })} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+                    {/* Form fields */}
                     <div>
-                      <Label htmlFor="type">Type</Label>
-                      <Select
-                        value={newDocument.type}
-                        onValueChange={(v) => setNewDocument({ ...newDocument, type: v })}
-                      >
-                        <SelectTrigger id="type">
-                          <SelectValue placeholder="Type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {["policy", "procedure", "standard", "record", "form"].map((o) => (
-                            <SelectItem key={o} value={o}>
-                              {o.charAt(0).toUpperCase() + o.slice(1)}
-                            </SelectItem>
+                      <Label htmlFor="title">Title</Label>
+                      <Input id="title" value={newDocument.title} onChange={e => setNewDocument({ ...newDocument, title: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea id="description" value={newDocument.description} onChange={e => setNewDocument({ ...newDocument, description: e.target.value })} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="type">Type</Label>
+                        <Select
+                          value={newDocument.type}
+                          onValueChange={(v) => setNewDocument({ ...newDocument, type: v })}
+                        >
+                          <SelectTrigger id="type">
+                            <SelectValue placeholder="Type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {["policy", "procedure", "standard", "record", "form"].map((o) => (
+                              <SelectItem key={o} value={o}>
+                                {o.charAt(0).toUpperCase() + o.slice(1)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="status">Status</Label>
+                        <Select
+                          value={newDocument.status}
+                          onValueChange={(v) => setNewDocument({ ...newDocument, status: v })}
+                        >
+                          <SelectTrigger id="status">
+                            <SelectValue placeholder="Status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {["draft", "review", "approved", "obsolete"].map((s) => (
+                              <SelectItem key={s} value={s}>
+                                {s.charAt(0).toUpperCase() + s.slice(1)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="version">Version</Label>
+                        <Input id="version" value={newDocument.version} onChange={e => setNewDocument({ ...newDocument, version: e.target.value })} />
+                      </div>
+                      <div>
+                        <Label htmlFor="approvalDate">Approval Date</Label>
+                        <Input id="approvalDate" type="date" value={newDocument.approvalDate} onChange={e => setNewDocument({ ...newDocument, approvalDate: e.target.value })} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="ownerEmail">Owner</Label>
+                        <Input id="ownerEmail" value={newDocument.ownerEmail} onChange={e => setNewDocument({ ...newDocument, ownerEmail: e.target.value })} />
+                      </div>
+                      <div>
+                        <Label htmlFor="approver">Approver</Label>
+                        <Input id="approver" value={newDocument.approverEmail} onChange={e => setNewDocument({ ...newDocument, approverEmail: e.target.value })} />
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="reviewDate">Next Review</Label>
+                      <Input id="reviewDate" type="date" value={newDocument.reviewDate} onChange={e => setNewDocument({ ...newDocument, reviewDate: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>Content / Summary</Label>
+                      <Textarea value={newDocument.content} onChange={e => setNewDocument({ ...newDocument, content: e.target.value })} />
+                    </div>
+
+                    {/* File upload */}
+                    <div>
+                      <Label>Upload File</Label>
+                      <div {...getRootProps()} className="p-4 rounded border-2 border-dashed hover:bg-gray-50">
+                        <input {...getInputProps()} />
+                        {file ? <p>📄 {file.name}</p> : <p>Drag & drop or click to select file</p>}
+                      </div>
+                    </div>
+
+                    {/* Version history */}
+                    {isEditing && currentDocId && versionHistory[currentDocId]?.length > 0 && (
+                      <div className="border-t pt-2">
+                        <h4>Version History</h4>
+                        <ul className="list-disc ml-4">
+                          {versionHistory[currentDocId].map(v => (
+                            <li key={v.id} className="flex items-center justify-between">
+                              <span>{v.version} – {new Date(v.uploadedAt).toLocaleDateString()}</span>
+                              <Button size="xs" onClick={() => dispatch(downloadVersionAsync(v.id))}>Download</Button>
+                            </li>
                           ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="status">Status</Label>
-                      <Select
-                        value={newDocument.status}
-                        onValueChange={(v) => setNewDocument({ ...newDocument, status: v })}
-                      >
-                        <SelectTrigger id="status">
-                          <SelectValue placeholder="Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {["draft", "review", "approved", "obsolete"].map((s) => (
-                            <SelectItem key={s} value={s}>
-                              {s.charAt(0).toUpperCase() + s.slice(1)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="version">Version</Label>
-                      <Input id="version" value={newDocument.version} onChange={e => setNewDocument({ ...newDocument, version: e.target.value })} />
-                    </div>
-                    <div>
-                      <Label htmlFor="approvalDate">Approval Date</Label>
-                      <Input id="approvalDate" type="date" value={newDocument.approvalDate} onChange={e => setNewDocument({ ...newDocument, approvalDate: e.target.value })} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="ownerEmail">Owner Email</Label>
-                      <Input id="ownerEmail" value={newDocument.ownerEmail} onChange={e => setNewDocument({ ...newDocument, ownerEmail: e.target.value })} />
-                    </div>
-                    <div>
-                      <Label htmlFor="approver">Approver</Label>
-                      <Input id="approver" value={newDocument.approverEmail} onChange={e => setNewDocument({ ...newDocument, approverEmail: e.target.value })} />
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="reviewDate">Next Review</Label>
-                    <Input id="reviewDate" type="date" value={newDocument.reviewDate} onChange={e => setNewDocument({ ...newDocument, reviewDate: e.target.value })} />
-                  </div>
-                  <div>
-                    <Label>Content / Summary</Label>
-                    <Textarea value={newDocument.content} onChange={e => setNewDocument({ ...newDocument, content: e.target.value })} />
-                  </div>
-                        
-                  {/* File upload */}
-                  <div>
-                    <Label>Upload File</Label>
-                    <div {...getRootProps()} className="p-4 rounded border-2 border-dashed hover:bg-gray-50">
-                      <input {...getInputProps()} />
-                      {file ? <p>📄 {file.name}</p> : <p>Drag & drop or click to select file</p>}
-                    </div>
-                  </div>
-                        
-                  {/* Version history */}
-                  {isEditing && currentDocId && versionHistory[currentDocId]?.length > 0 && (
-                    <div className="border-t pt-2">
-                      <h4>Version History</h4>
-                      <ul className="list-disc ml-4">
-                        {versionHistory[currentDocId].map(v => (
-                          <li key={v.id} className="flex items-center justify-between">
-                            <span>{v.version} – {new Date(v.uploadedAt).toLocaleDateString()}</span>
-                            <Button size="xs" onClick={() => dispatch(downloadVersionAsync(v.id))}>Download</Button>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 </div>
-                
+
                 <DialogFooter className="pt-4">
                   <Button variant="outline" onClick={() => { resetForm(); setDialogOpen(false); }}>Cancel</Button>
                   <Button onClick={handleAddDocument}>{isEditing ? "Save Changes" : "Create Document"}</Button>
@@ -414,16 +484,16 @@ export default function DocumentManagement() {
                       </Badge>
                     </TableCell>
                     <TableCell>{doc.version}</TableCell>
-                    <TableCell>{doc.owner}</TableCell>
+                    <TableCell>{doc.ownerEmail}</TableCell>
                     <TableCell>
                       <div className="flex space-x-2">
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" onClick={() => handleView(doc.id)}>
                           <Eye className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(doc)}>
                           <EditIcon className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" onClick={() => handleDownload(doc.id)}>
                           <Download className="h-4 w-4" />
                         </Button>
                       </div>
@@ -433,6 +503,65 @@ export default function DocumentManagement() {
               )}
             </TableBody>
           </Table>
+          <Dialog
+            open={isPreviewOpen}
+            onOpenChange={(open) => {
+              if (!open && previewUrl) {
+                URL.revokeObjectURL(previewUrl);
+                setPreviewUrl(null);
+              }
+              setIsPreviewOpen(open);
+            }}
+          >
+            <DialogContent className="max-w-4xl w-full max-h-4xl h-full p-6 flex flex-col">
+              <DialogHeader>
+                <DialogTitle className="text-lg">📄 Document Preview</DialogTitle>
+                <DialogDescription>
+                  You are viewing the latest version of this document.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="flex-1 mt-4 border rounded-md overflow-hidden shadow-inner bg-white">
+                {previewUrl ? (
+                  <iframe
+                    src={previewUrl}
+                    className="w-full h-full"
+                    title="Document Preview"
+                    frameBorder="0"
+                  />
+                ) : (
+                  <div className="h-full flex items-center justify-center text-muted-foreground">
+                    No preview available
+                  </div>
+                )}
+              </div>
+              <DialogFooter className="mt-4 flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  disabled={!previewUrl}
+                  onClick={() => previewUrl && window.print()}
+                >
+                  📃 Print
+                </Button>
+                <Button
+                  variant="primary"
+                  disabled={!previewUrl}
+                  onClick={() => {
+                    if (previewUrl) {
+                      const a = document.createElement('a');
+                      a.href = previewUrl;
+                      a.download = "document.pdf";
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
+                    }
+                  }}
+                >
+                  📥 Download
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </CardContent>
         <CardFooter className="flex justify-between">
           <div className="text-sm text-muted-foreground">

@@ -8,6 +8,7 @@ import assetsReducer from "@/lib/features/assets/assetsSlice"
 import trainingReducer from "@/lib/features/training/trainingSlice"
 import nonconformitiesReducer from "@/lib/features/nonconformities/nonconformitiesSlice"
 import authReducer from "@/lib/features/auth/authSlice"
+import { listenerMiddleware } from "./features/listeners/listenerMiddleware"
 
 
 
@@ -23,6 +24,8 @@ export const store = configureStore({
     training: trainingReducer,
     nonconformities: nonconformitiesReducer,
   },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware().prepend(listenerMiddleware.middleware),
 })
 
 export type RootState = ReturnType<typeof store.getState>

@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { fetchControlsByCompany, updateControlStatusApi } from "@utils/api";
+import { fetchControlsByCompany, updateControlStatusBackend } from "@utils/api";
 
 export const fetchControlsAsync = createAsyncThunk(
   'compliance/fetchControls',
@@ -12,16 +12,18 @@ export const fetchControlsAsync = createAsyncThunk(
   }
 );
 
-export const updateControlStatusAsync = createAsyncThunk(
+export const updateControlStatusAsync = createAsyncThunk<
+  { id: string; status: string; evidence: string },
+  { id: string; status: string; evidence: string },
+  { rejectValue: string }
+>(
   'compliance/updateControlStatus',
-  async (
-    payload: { id: string; status: string; evidence: string; companyId: number },
-    { rejectWithValue }
-  ) => {
+  async ({ id, status, evidence }, { rejectWithValue }) => {
     try {
-      return await updateControlStatusApi(payload.id, payload.status, payload.evidence);
-    } catch (err: any) {
-      return rejectWithValue(err.message || 'Failed to update control');
+      await updateControlStatusBackend(id, { status, evidence });
+      return { id, status, evidence };
+    } catch (e: any) {
+      return rejectWithValue(e.message);
     }
   }
 );
@@ -60,11 +62,15 @@ export const complianceSlice = createSlice({
       })
 
       .addCase(updateControlStatusAsync.fulfilled, (state, action) => {
-        const idx = state.controls.findIndex(c => c.id === action.payload.id);
-        if (idx > -1) state.controls[idx] = action.payload;
+        const c = state.controls.find(ctrl => ctrl.id === action.payload.id);
+        if (c) {
+          c.status = action.payload.status;
+          c.evidence = action.payload.evidence;
+          c.lastReview = new Date().toISOString().split("T")[0];
+        }
       })
       .addCase(updateControlStatusAsync.rejected, (state, action) => {
-        state.error = action.payload as string;
+        state.error = action.payload || 'Control update failed';
       });
   }
 });

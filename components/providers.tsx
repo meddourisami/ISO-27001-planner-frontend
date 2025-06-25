@@ -40,6 +40,8 @@ function AppInitializer() {
     }
   }, [user?.companyId, dispatch]);
 
+  
+
   return null;
 }
 

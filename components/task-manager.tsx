@@ -28,6 +28,7 @@ import { useToast } from "@/hooks/use-toast"
 export default function TaskManager() {
   const dispatch = useDispatch<AppDispatch>()
   const tasks = useSelector((state: RootState) => state.tasks.items);
+  const controls = useSelector((state: RootState) => state.compliance.controls);
   const loading = useSelector((state: RootState) => state.tasks.loading);
   const user = useSelector((state: RootState) => state.auth.user);
 
@@ -305,12 +306,21 @@ export default function TaskManager() {
                     </div>
                     <div>
                       <Label htmlFor="relatedControl">Related Control</Label>
-                      <Input
-                        id="relatedControl"
+                      <Select
                         value={newTask.relatedControl}
-                        onChange={(e) => setNewTask({ ...newTask, relatedControl: e.target.value })}
-                        placeholder="e.g., A.8.2.3"
-                      />
+                        onValueChange={(value) => setNewTask({ ...newTask, relatedControl: value })}
+                      >
+                        <SelectTrigger id="relatedControl">
+                          <SelectValue placeholder="Select a control" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {controls.map((control) => (
+                            <SelectItem key={control.id} value={control.id}>
+                              {control.title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>

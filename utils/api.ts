@@ -105,23 +105,36 @@ export async function deleteAssetApi(id: string): Promise<void> {
 // document API endpoints
 
 export async function fetchDocuments(companyId: number): Promise<DocumentDto[]> {
-  return (await api.get(`/documents/${companyId}`)).data;
+  return (await api.get(`/documents/company/${companyId}`)).data;
 }
 
 export async function createDocumentWithFile(dto: DocumentDto, file: File): Promise<DocumentDto> {
   const form = new FormData();
   form.append("data", new Blob([JSON.stringify(dto)], { type: "application/json" }));
   form.append("file", file);
-  return (await api.post(`/documents`, form, { headers: { "Content-Type": "multipart/form-data" } })).data;
+  return (await api.post(`/documents`, form, { headers: { "Content-Type": "multipart/form-data" }, timeout: 10000, })).data;
 }
 
-export async function uploadNewVersion(id: string, version: string, file: File): Promise<void> {
+export async function updateDocumentWithFile(
+  id: string,
+  dto: DocumentDto,
+  file?: File
+): Promise<string> {
   const form = new FormData();
-  form.append("file", file);
-  return (await api.put(`/documents/${id}/upload`, form, { params: { version } })).data;
+  form.append(
+    "data",
+    new Blob([JSON.stringify(dto)], { type: "application/json" })
+  );
+  if (file) {
+    form.append("file", file);
+  }
+  const res = await api.put(`/documents/${id}/update`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data; // response: "Document updated successfully."
 }
 
-export async function getVersionHistory(documentId: string): Promise<DocumentVersionDto[]> {
+export async function getVersionHistoryList(documentId: string): Promise<DocumentVersionDto[]> {
   const res = await api.get(`/documents/${documentId}/versions`);
   return res.data;
 }
@@ -132,7 +145,7 @@ export async function downloadVersion(versionId: number): Promise<Blob> {
   return res.data;
 }
 
-export async function searchVersions(query: string): Promise<DocumentVersionDto[]> {
+export async function searchInDocuments(query: string): Promise<DocumentVersionDto[]> {
   return (await api.get(`/documents/search`, { params: { query } })).data;
 }
 
@@ -193,12 +206,13 @@ export async function fetchControlsByCompany(companyId: number): Promise<Control
   return (await api.get(`/controls/company/${companyId}`)).data;
 }
 
-export async function updateControlStatusApi(
-  id: string,
-  status: string,
-  evidence: string
-): Promise<ControlDto> {
-  return (await api.put(`/controls/${id}`, { status, evidence })).data;
+export interface ControlUpdateRequest {
+  status: string;
+  evidence: string;
+}
+
+export async function updateControlStatusBackend(id: string, req: ControlUpdateRequest): Promise<void> {
+  await api.put(`/controls/${id}/update-status`, req);
 }
 
 // Employee and training API endpoints

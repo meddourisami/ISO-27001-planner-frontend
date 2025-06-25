@@ -553,7 +553,7 @@ export default function NonConformitiesManagement() {
                           <Label>Related Controls</Label>
                           <div className="border rounded-md p-3 mt-1 max-h-[150px] overflow-y-auto">
                             <div className="grid grid-cols-2 gap-2">
-                              {controls.slice(0, 20).map((control) => (
+                              {controls.slice(0, 93).map((control) => (
                                 <div key={control.id} className="flex items-center space-x-2">
                                   <Checkbox
                                     id={`control-${control.id}`}

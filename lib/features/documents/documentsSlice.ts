@@ -1,6 +1,6 @@
 import { DocumentDto, DocumentVersionDto } from "@/types";
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import { createDocumentWithFile, fetchDocuments, getVersionHistory, searchVersions, uploadNewVersion } from "@utils/api";
+import { createDocumentWithFile, fetchDocuments, getVersionHistoryList, searchInDocuments, updateDocumentWithFile, uploadNewVersion } from "@utils/api";
 
 interface DocumentState {
   items: DocumentDto[];
@@ -38,33 +38,33 @@ export const createDocumentAsync = createAsyncThunk<DocumentDto, { dto: Document
   }
 );
 
-export const uploadDocumentVersionAsync = createAsyncThunk<void, { id: string; version: string; file: File }>(
-  'documents/uploadVersion',
-  async ({ id, version, file }, { rejectWithValue }) => {
-    try {
-      return await uploadNewVersion(id, version, file);
-    } catch (err: any) {
-      return rejectWithValue(err.message);
-    }
+export const updateDocumentAsync = createAsyncThunk<
+  string,
+  { id: string; dto: Omit<DocumentDto, "id">; file?: File }
+>("documents/update", async ({ id, dto, file }, { rejectWithValue }) => {
+  try {
+    return await updateDocumentWithFile(id, dto, file);
+  } catch (e: any) {
+    return rejectWithValue(e.message);
   }
-);
+});
 
 export const fetchVersionHistoryAsync = createAsyncThunk<DocumentVersionDto[], string>(
   'documents/fetchVersions',
   async (documentId, { rejectWithValue }) => {
     try {
-      return await getVersionHistory(documentId);
+      return await getVersionHistoryList(documentId);
     } catch (err: any) {
       return rejectWithValue(err.message);
     }
   }
 );
 
-export const searchDocumentVersionsAsync = createAsyncThunk<DocumentVersionDto[], string>(
+export const searchInDocumentAsync = createAsyncThunk<DocumentVersionDto[], string>(
   'documents/searchVersions',
   async (query, { rejectWithValue }) => {
     try {
-      return await searchVersions(query);
+      return await searchInDocuments(query);
     } catch (err: any) {
       return rejectWithValue(err.message);
     }
@@ -99,14 +99,22 @@ const documentSlice = createSlice({
         state.items.push(action.payload);
       });
 
-    builder
-      .addCase(fetchVersionHistoryAsync.fulfilled, (state, action) => {
-        const documentId = action.meta.arg;
-        state.versions[documentId] = action.payload;
-      });
+    builder.addCase(fetchVersionHistoryAsync.pending, (state) => {
+      state.loading = true;
+      state.error = undefined;
+    });
+    builder.addCase(fetchVersionHistoryAsync.fulfilled, (state, action) => {
+      const docId = action.meta.arg;
+      state.versions[docId] = action.payload;
+      state.loading = false;
+    });
+    builder.addCase(fetchVersionHistoryAsync.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload as string;
+    });
 
     builder
-      .addCase(searchDocumentVersionsAsync.fulfilled, (state, action) => {
+      .addCase(searchInDocumentAsync.fulfilled, (state, action) => {
         // Flatten or handle global version search results as needed
         console.log("Search results:", action.payload);
       });
