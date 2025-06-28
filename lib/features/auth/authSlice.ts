@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit"
-import { getCurrentUserDetails, verifyMfa, login, resendMfa } from "@/lib/auth"
+import { getCurrentUserDetails, verifyMfa, login, resendMfa, logout } from "@/lib/auth"
 import type { BackendUser } from "@/types"
 
 interface AuthState {
@@ -68,6 +68,10 @@ export const fetchCurrentUser = createAsyncThunk<BackendUser, void, { rejectValu
   }
 )
 
+export const logoutAsync = createAsyncThunk('auth/logout', async () => {
+  await logout();
+});
+
 // Slice
 const authSlice = createSlice({
   name: "auth",
@@ -132,6 +136,9 @@ const authSlice = createSlice({
         state.status = "failed"
         state.error = action.payload as string
       })
+      .addCase(logoutAsync.fulfilled, (state) => {
+      authSlice.caseReducers.logOuT(state);
+    })
   },
 })
 

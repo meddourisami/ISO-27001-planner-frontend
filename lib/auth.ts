@@ -1,4 +1,3 @@
-import { useAuth } from "@/context/AuthContext"
 import api from "./axios"
 import { BackendUser } from "@/types"
 

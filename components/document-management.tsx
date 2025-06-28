@@ -79,6 +79,7 @@ export default function DocumentManagement() {
 
     const dto: Omit<DocumentDto, "id"> = {
       ...newDocument,
+      ownerEmail: user.email,
       companyId: user.companyId,
     };
 
@@ -495,6 +496,9 @@ export default function DocumentManagement() {
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleDownload(doc.id)}>
                           <Download className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="default">
+                          Approve
                         </Button>
                       </div>
                     </TableCell>

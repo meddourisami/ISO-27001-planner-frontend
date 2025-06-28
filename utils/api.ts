@@ -1,4 +1,4 @@
-import { AssetDto, AuditDto, ControlDto, DocumentDto, DocumentVersionDto, EmployeeDto, NonConformityDto, RiskDto, TaskDto, TrainingDto, User } from "@/types";
+import { AssetDto, AuditDto, BackendUser, ControlDto, DocumentDto, DocumentVersionDto, EmployeeDto, NonConformityDto, RiskDto, TaskDto, TrainingDto, User } from "@/types";
 import api from "../lib/axios";
 
 
@@ -40,6 +40,24 @@ export async function editMember(
   role: string
 ): Promise<void> {
   await api.put("/user/edit-member", { targetEmail, email, fullName, role });
+}
+
+//admin API endpoints
+
+export async function fetchAdmins(): Promise<BackendUser[]> {
+  return (await api.get('/user/admins')).data;
+}
+
+export async function createAdmin(dto: Omit<BackendUser, 'id'>): Promise<BackendUser> {
+  return (await api.post('/admin/users', dto)).data;
+}
+
+export async function updateAdmin(id: string, dto: Omit<BackendUser, 'id'>): Promise<BackendUser> {
+  return (await api.put(`/admin/users/${id}`, dto)).data;
+}
+
+export async function deleteAdmin(id: string): Promise<void> {
+  await api.delete(`/admin/users/${id}`);
 }
 
 //role api endpoints
@@ -192,8 +210,15 @@ export async function createNonConformity(dto: NonConformityDto): Promise<NonCon
   return (await api.post('/nonconformities', dto)).data;
 }
 
-export async function updateNonConformityApi(id: string, dto: NonConformityDto): Promise<NonConformityDto> {
-  return (await api.put(`/nonconformities/${id}`, dto)).data;
+export async function updateNonConformityApi(
+  id: string,
+  dto: Omit<NonConformityDto, 'id'>
+): Promise<NonConformityDto> {
+  const trimmedId = id.trim();
+  const url = `/nonconformities/${trimmedId}`;
+  console.log("📡 Sending PUT request to:", url);
+  console.log("📦 Payload:", dto);
+  return (await api.put(url, dto)).data;
 }
 
 export async function deleteNonConformityApi(id: string): Promise<void> {

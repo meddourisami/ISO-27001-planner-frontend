@@ -182,7 +182,7 @@ export default function NonConformitiesManagement() {
     }
     const dto: NonConformityDto = {
       ...newNonConformity,
-      id: isEditing ? selectedNonConformity! : undefined,
+      id: isEditing ? selectedNonConformity!.trim() : undefined,
       companyId: user.companyId,
     }
     try {
@@ -198,7 +198,9 @@ export default function NonConformitiesManagement() {
       setSelectedNonConformity(null)
       setNewNonConformity(newNonConformity)
     } catch (e: any) {
-      toast({ title: 'Save error', description: e.message, variant: 'destructive' })
+      toast({ title: 'Save error', description: e.message || e.msg , variant: 'destructive' })
+            console.log(e?.data?.message, e?.message, e.response?.data, e)
+
     }
   }
 
@@ -554,13 +556,13 @@ export default function NonConformitiesManagement() {
                           <div className="border rounded-md p-3 mt-1 max-h-[150px] overflow-y-auto">
                             <div className="grid grid-cols-2 gap-2">
                               {controls.slice(0, 93).map((control) => (
-                                <div key={control.id} className="flex items-center space-x-2">
+                                <div key={control.id.trim()} className="flex items-center space-x-2">
                                   <Checkbox
-                                    id={`control-${control.id}`}
-                                    checked={newNonConformity.relatedControls.includes(control.id)}
-                                    onCheckedChange={(checked) => handleControlChange(control.id, checked as boolean)}
+                                    id={`control-${control.id.trim()}`}
+                                    checked={newNonConformity.relatedControls.includes(control.id.trim())}
+                                    onCheckedChange={(checked) => handleControlChange(control.id.trim(), checked as boolean)}
                                   />
-                                  <Label htmlFor={`control-${control.id}`} className="text-sm">
+                                  <Label htmlFor={`control-${control.id.trim()}`} className="text-sm">
                                     {control.title.substring(0, 30)}
                                     {control.title.length > 30 ? "..." : ""}
                                   </Label>

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import Dashboard from "@/components/dashboard"
 import { Providers } from "@/components/providers"
 import { useAuthTokenRefresh } from "@/hooks/useAuthTokenRefresh"
@@ -17,10 +17,12 @@ import { fetchTasksAsync } from "@/lib/features/tasks/tasksSlice"
 import { fetchNonConformitiesAsync } from "@/lib/features/nonconformities/nonconformitiesSlice"
 import { fetchControlsAsync } from "@/lib/features/compliance/complianceSlice"
 import { fetchEmployeesAsync, fetchTrainingsAsync } from "@/lib/features/training/trainingSlice"
+import RoleGuard from "@components/RoleGuard"
 
 export default function Home() {
   useAuthTokenRefresh()
   const router = useRouter();
+  const pathname = usePathname();
   const dispatch = useDispatch<AppDispatch>()
   const { user, mfaRequired, status } = useAppSelector((state) => state.auth)
 
@@ -30,9 +32,22 @@ export default function Home() {
 
   useEffect(() => {
     if (status === 'idle' && !user && !mfaRequired) {
-      router.push('/login')
+      router.push('/login');
+    } else if (status === 'idle' && user) {
+      const isAdminPage = pathname.startsWith('/admin');
+      if (user.role === 'SUPER_ADMIN') {
+        // If super admin, stay on /admin or allow any page
+        if (!isAdminPage && pathname !== '/admin') {
+          router.push('/admin');
+        }
+      } else {
+        // Not super admin: block access to /admin, redirect to main
+        if (isAdminPage) {
+          router.push('/');
+        }
+      }
     }
-  }, [status, user, mfaRequired, router])
+  }, [status, user, mfaRequired, router]);
 
   useEffect(() => {
     if (user?.companyId) {
@@ -51,7 +66,9 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-background">
       <Providers>
-        <Dashboard />
+        <RoleGuard>
+          <Dashboard />
+        </RoleGuard>
       </Providers>
     </main>
   )

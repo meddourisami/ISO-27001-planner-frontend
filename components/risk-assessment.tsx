@@ -166,10 +166,7 @@ export default function RiskAssessment() {
     .filter(
       (risk) =>
         risk.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        risk.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        risk.assetId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        risk.threat.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        risk.vulnerability.toLowerCase().includes(searchTerm.toLowerCase()),
+        risk.description.toLowerCase().includes(searchTerm.toLowerCase()),
     )
     .filter((risk) => (filterStatus === "all" ? true : risk.status === filterStatus))
     .sort((a, b) => {

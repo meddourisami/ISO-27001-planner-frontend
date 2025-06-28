@@ -25,8 +25,13 @@ export const updateNonConformityAsync = createAsyncThunk<
   NonConformityDto,
   { rejectValue: string }
 >('nonconformities/update', async (dto, { rejectWithValue }) => {
-  try { return await updateNonConformityApi(dto.id!, dto); }
-  catch (e: any) { return rejectWithValue(e.message); }
+  try {
+    const { id, ...dataWithoutId } = dto;
+    const trimmedId = id?.trim();
+    return await updateNonConformityApi(trimmedId!, dataWithoutId as Omit<NonConformityDto, 'id'>);
+  } catch (e: any) {
+    return rejectWithValue(e.message);
+  }
 });
 
 export const deleteNonConformityAsync = createAsyncThunk<

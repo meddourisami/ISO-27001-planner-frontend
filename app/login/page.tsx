@@ -52,9 +52,14 @@ export default function LoginPage() {
         toast({ title: "MFA Required", description: "Check your email." });
         startResendTimer();
       } else {
-        await dispatch(fetchCurrentUser());
+        const user = await dispatch(fetchCurrentUser()).unwrap();
         toast({ title: "Login Successful", description: "Welcome!" });
-        router.push("/");
+        
+        if (user.role === "SUPER_ADMIN") {
+          router.push("/admin");
+        } else {
+          router.push("/");
+        }
       }
     } catch (err: any) {
       toast({ title: "Login Failed", description: err, variant: "destructive" });
@@ -114,11 +119,11 @@ export default function LoginPage() {
           <Card>
             <CardHeader className="space-y-1">
               <div className="flex items-center justify-center mb-4">
-                <Image src="/LOGO.png" alt="ISMS Planner" width={120} height={120} className="rounded-lg" />
+                <Image src="/LOGO.png" alt="ISMS Planner" width={120} height={120} priority className="rounded-lg" />
               </div>
               <CardTitle className="text-2xl text-center">ISMS Planner</CardTitle>
               <CardDescription className="text-center">
-                Enter your credentials to access your account
+                Contact us in ProtectedConsulting.com or email us in ProtectedConsulting@gmail.com to set up your account
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
