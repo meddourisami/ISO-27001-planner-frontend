@@ -1,6 +1,6 @@
 import { DocumentDto, DocumentVersionDto } from "@/types";
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import { createDocumentWithFile, fetchDocuments, getVersionHistoryList, searchInDocuments, updateDocumentWithFile, uploadNewVersion } from "@utils/api";
+import { createDocumentWithFile, fetchDocuments, getVersionHistoryList, searchInDocuments, updateDocumentWithFile } from "@utils/api";
 
 interface DocumentState {
   items: DocumentDto[];
@@ -43,7 +43,8 @@ export const updateDocumentAsync = createAsyncThunk<
   { id: string; dto: Omit<DocumentDto, "id">; file?: File }
 >("documents/update", async ({ id, dto, file }, { rejectWithValue }) => {
   try {
-    return await updateDocumentWithFile(id, dto, file);
+    const fullDto: DocumentDto = { ...dto, id };
+    return await updateDocumentWithFile(id, fullDto, file);
   } catch (e: any) {
     return rejectWithValue(e.message);
   }

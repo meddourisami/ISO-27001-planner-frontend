@@ -1,7 +1,7 @@
 "use client"
 
 import { useToast } from "@/hooks/use-toast";
-import { createAdminAsync, deleteAdminAsync, fetchAdminsAsync, updateAdminAsync } from "@/lib/features/admin/adminSlice";
+import { addAdminUserAsync, deleteAdminAsync, fetchAdminsAsync, updateAdminAsync } from "@/lib/features/admin/adminSlice";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { BackendUser } from "@/types";
 import { useRouter } from "next/navigation";
@@ -14,7 +14,7 @@ import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { logoutAsync } from "@/lib/features/auth/authSlice";
 import { Textarea } from "./ui/textarea";
-import { fetchCompanyDetails } from "@utils/api";
+import { fetchCompanyDetails, getCompanyById } from "@utils/api";
 
 export default function AdminPage() {
     const dispatch = useAppDispatch();
@@ -26,6 +26,7 @@ export default function AdminPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState<BackendUser | null>(null);
+  const [companyNames, setCompanyNames] = useState<Record<number, string>>({});
   const [formState, setFormState] = useState<Omit<BackendUser, 'id'>>({
     email: '',
     fullName: '',
@@ -46,11 +47,38 @@ export default function AdminPage() {
   useEffect(() => {
     if (user?.role === 'SUPER_ADMIN') {
         dispatch(fetchAdminsAsync());
-        fetchCompanyDetails();
     } else {
       router.push('/');
     }
   }, [user]);
+
+  useEffect(() => {
+    const fetchAllCompanyNames = async () => {
+      const nameMap: Record<number, string> = {};
+      const fetchedIds = new Set(Object.keys(companyNames).map(Number));
+
+      await Promise.all(
+        admins.map(async (admin) => {
+          if (admin.companyId && !fetchedIds.has(admin.companyId)) {
+            try {
+              const data = await getCompanyById(admin.companyId);
+              nameMap[admin.companyId] = data.name;
+            } catch (err) {
+              nameMap[admin.companyId] = "Unknown Company";
+            }
+          }
+        })
+      );
+
+      if (Object.keys(nameMap).length > 0) {
+        setCompanyNames((prev) => ({ ...prev, ...nameMap }));
+      }
+    };
+
+    if (admins.length > 0) {
+      fetchAllCompanyNames();
+    }
+  }, [admins]);
 
   const resetForm = () => {
     setFormState({ email: '', fullName: '', mfaEnabled: false, role: 'ISMS_ADMIN', companyId: user!.companyId });
@@ -76,7 +104,7 @@ export default function AdminPage() {
         await dispatch(updateAdminAsync({ id: selectedAdmin.id!, ...formState })).unwrap();
         toast({ title: 'Admin updated' });
       } else {
-        await dispatch(createAdminAsync(formState)).unwrap();
+        await dispatch(addAdminUserAsync(adminForm)).unwrap();
         toast({ title: "Admin Added", description: "A new ISMS admin has been created." });
         setAdminForm({ email: '', password: '', companyName: '', scope: '' });
       }
@@ -87,14 +115,14 @@ export default function AdminPage() {
     }
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Delete this admin?')) {
-      dispatch(deleteAdminAsync(id))
-        .unwrap()
-        .then(() => toast({ title: 'Admin deleted' }))
-        .catch(e => toast({ title: 'Error', description: e, variant: 'destructive' }));
-    }
-    };
+  const handleDelete = (email: string) => {
+  if (confirm('Delete this admin?')) {
+    dispatch(deleteAdminAsync(email))
+      .unwrap()
+      .then(() => toast({ title: 'Admin deleted' }))
+      .catch(e => toast({ title: 'Error', description: e, variant: 'destructive' }));
+  }
+};
     
     const handleLogout = async () => {
         await dispatch(logoutAsync()).unwrap();
@@ -119,13 +147,14 @@ export default function AdminPage() {
           </TableHeader>
           <TableBody>
             {admins.map(a => (
-              <TableRow key={a.id}>
+              <TableRow key={a.email}>
                 <TableCell>{a.email}</TableCell>
-                <TableCell>{a.fullName}</TableCell>
+                <TableCell>
+                  {companyNames[a.companyId]}
+                </TableCell>
                 <TableCell>{a.role}</TableCell>
                 <TableCell>
-                  <Button size="sm" onClick={() => openEdit(a)}>Edit</Button>
-                  <Button size="sm" variant="destructive" onClick={() => handleDelete(a.id!)}>
+                  <Button size="sm" variant="destructive" onClick={() => handleDelete(a.email!)}>
                     Delete
                   </Button>
                 </TableCell>

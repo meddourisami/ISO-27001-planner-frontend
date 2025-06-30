@@ -3,6 +3,7 @@ import { addTaskAsync, updateTaskAsync } from "../tasks/tasksSlice";
 import { syncControlStatuses } from "@utils/syncControlStatuses";
 import { addNonConformityAsync, updateNonConformityAsync } from "../nonconformities/nonconformitiesSlice";
 import { AppDispatch, RootState } from "@/lib/store";
+import { addAdminUserAsync, fetchAdminsAsync } from "../admin/adminSlice";
 
 export const listenerMiddleware = createListenerMiddleware();
 
@@ -23,5 +24,12 @@ listenerMiddleware.startListening({
     const getState = listenerApi.getState as () => RootState;
 
     await syncControlStatuses(dispatch, getState);
+  },
+});
+
+listenerMiddleware.startListening({
+  predicate: (action) => action.type === addAdminUserAsync.fulfilled.type,
+  effect: async (action, listenerApi) => {
+    listenerApi.dispatch(fetchAdminsAsync());
   },
 });

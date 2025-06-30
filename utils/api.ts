@@ -1,4 +1,4 @@
-import { AssetDto, AuditDto, BackendUser, ControlDto, DocumentDto, DocumentVersionDto, EmployeeDto, NonConformityDto, RiskDto, TaskDto, TrainingDto, User } from "@/types";
+import { AssetDto, AuditDto, BackendUser, CompanyDTO, ControlDto, DocumentDto, DocumentVersionDto, EmployeeDto, NonConformityDto, RiskDto, TaskDto, TrainingDto, User } from "@/types";
 import api from "../lib/axios";
 
 
@@ -16,6 +16,10 @@ export async function fetchCompanyUsers() {
 export async function updateCompanyDetails(details: { companyId: number; name: string; ismsScope: string }) {
   const { data } = await api.put("/company/update", details);
   return data;
+}
+
+export async function getCompanyById(id: number): Promise<CompanyDTO> {
+  return (await api.get(`/company/${id}`)).data;
 }
 
 //Users api endpoints
@@ -48,16 +52,24 @@ export async function fetchAdmins(): Promise<BackendUser[]> {
   return (await api.get('/user/admins')).data;
 }
 
-export async function createAdmin(dto: Omit<BackendUser, 'id'>): Promise<BackendUser> {
-  return (await api.post('/admin/users', dto)).data;
+export interface AdminUserCreationRequest {
+  email: string;
+  password: string;
+  companyName: string;
+  scope: string;
+}
+
+export async function createAdmin(dto: AdminUserCreationRequest): Promise<string> {
+  const response = await api.post('/admin/create-isms-admin', dto);
+  return response.data; // "ISMS Admin and Company created successfully."
 }
 
 export async function updateAdmin(id: string, dto: Omit<BackendUser, 'id'>): Promise<BackendUser> {
   return (await api.put(`/admin/users/${id}`, dto)).data;
 }
 
-export async function deleteAdmin(id: string): Promise<void> {
-  await api.delete(`/admin/users/${id}`);
+export async function deleteAdminApi(email: string): Promise<string> {
+  return (await api.delete(`/admin/super-admin/delete-user/${encodeURIComponent(email)}`)).data;
 }
 
 //role api endpoints
@@ -149,7 +161,7 @@ export async function updateDocumentWithFile(
   const res = await api.put(`/documents/${id}/update`, form, {
     headers: { "Content-Type": "multipart/form-data" },
   });
-  return res.data; // response: "Document updated successfully."
+  return res.data;
 }
 
 export async function getVersionHistoryList(documentId: string): Promise<DocumentVersionDto[]> {

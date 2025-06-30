@@ -156,7 +156,7 @@ export default function AssetsManagement() {
     if (!asset || !asset.relatedRisks) return []
 
     return asset
-    ? risks.filter((risk) => asset.relatedRisks.includes(risk.id))
+    ? risks.filter((risk) => asset.relatedRisks.includes(risk.id!))
     : [];
   }
 
@@ -313,6 +313,16 @@ export default function AssetsManagement() {
     }
   }
 
+  const vulnerabilitySuggestions: Record<string, string> = {
+    hardware: "Physical damage, device theft, firmware vulnerabilities, power failure...",
+    software: "Unpatched software, bugs, zero-day exploits, outdated libraries...",
+    data: "Data leaks, unauthorized access, lack of encryption, poor backups...",
+    system: "Configuration errors, unpatched OS, privilege escalation risks...",
+    document: "Insecure storage, unauthorized access, lack of version control...",
+    people: "Social engineering, human error, insufficient training...",
+    facility: "Fire risk, physical intrusion, environmental hazards..."
+  };
+
   return (
     <div className="space-y-4">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
@@ -459,6 +469,11 @@ export default function AssetsManagement() {
                             onChange={(e) => setNewAsset({ ...newAsset, vulnerabilities: e.target.value })}
                             placeholder="List known vulnerabilities of this asset"
                           />
+                          {vulnerabilitySuggestions[newAsset.type] && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Suggested: {vulnerabilitySuggestions[newAsset.type]}
+                            </p>
+                          )}
                         </div>
                         <div className="col-span-2">
                           <Label htmlFor="controls">Security Controls</Label>
@@ -480,8 +495,8 @@ export default function AssetsManagement() {
                                   <input
                                     type="checkbox"
                                     id={`risk-${risk.id}`}
-                                    checked={newAsset.relatedRisks.includes(risk.id)}
-                                    onChange={(e) => handleRiskCheckboxChange(risk.id, e.target.checked)}
+                                    checked={newAsset.relatedRisks.includes(risk.id!)}
+                                    onChange={(e) => handleRiskCheckboxChange(risk.id!, e.target.checked)}
                                     className="rounded"
                                   />
                                   <label htmlFor={`risk-${risk.id}`} className="text-sm">

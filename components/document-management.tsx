@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Search, Filter, ArrowUpDown, FileText, Download, Eye, EditIcon } from "lucide-react"
 import { AppDispatch, type RootState } from "@/lib/store"
-import { createDocumentAsync, fetchDocumentsAsync, fetchVersionHistoryAsync, updateDocumentAsync, uploadDocumentVersionAsync } from "@/lib/features/documents/documentsSlice"
+import { createDocumentAsync, fetchDocumentsAsync, fetchVersionHistoryAsync, updateDocumentAsync } from "@/lib/features/documents/documentsSlice"
 import { downloadVersion } from "@utils/api"
 import { useToast } from "@/hooks/use-toast"
 import { DocumentDto } from "@/types"
@@ -82,6 +82,7 @@ export default function DocumentManagement() {
       ownerEmail: user.email,
       companyId: user.companyId,
     };
+    console.log( " " + dto.version +  "   file version ")
 
     try {
       if (isEditing && currentDocId) {
@@ -90,7 +91,8 @@ export default function DocumentManagement() {
         }
         // Dispatch version upload
         console.log("Uploading version:", currentDocId, file);
-        await dispatch(updateDocumentAsync({ id: currentDocId, dto, file })).unwrap();
+        const result = await dispatch(updateDocumentAsync({ id: currentDocId, dto, file })).unwrap();
+        console.log(result, "result of the update ")
       } else {
         await dispatch(createDocumentAsync({ dto, file })).unwrap();
       }
@@ -99,7 +101,7 @@ export default function DocumentManagement() {
       resetForm();
     } catch (err: any) {
       toast({ title: "Error", description: err || err.message || "something went wrong", variant: "destructive" });
-      console.log(err?.data?.message, err?.message, err.response?.data)
+      console.log(err?.data?.message, err?.message, err.response?.data, err, err.message)
     }
   };
 
@@ -187,6 +189,24 @@ export default function DocumentManagement() {
   const handleView = (docId: string) =>
     openDocumentPreview(docId, false);
 
+  async function handleFileDownload(versionId: number, fileName = "document") {
+    try {
+      const blob = await downloadVersion(versionId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      toast({
+        title: "Download Failed",
+        description: "Unable to download the document version.",
+        variant: "destructive",
+      });
+    }
+  }
+
   const filteredDocuments = documents
     .filter(
       (doc) =>
@@ -236,14 +256,14 @@ export default function DocumentManagement() {
                 <Button><span className="mr-2">➕</span> {isEditing ? "Edit Document" : "Add Document"}</Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
-                <DialogHeader>
+                <DialogHeader className="sticky top-0 bg-white z-10">
                   <DialogTitle>{isEditing ? "Edit Document" : "Add New Document"}</DialogTitle>
                   <DialogDescription>
                     {isEditing ? "Update fields and optionally upload new version" : "Fill details and upload file if available"}
                   </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex-1 overflow-y-auto space-y-4 py-2">
+                <div className="flex-grow overflow-y-auto px-2 py-4">
                   <div className="grid gap-4 py-4">
                     {/* Form fields */}
                     <div>
@@ -337,8 +357,8 @@ export default function DocumentManagement() {
                         <ul className="list-disc ml-4">
                           {versionHistory[currentDocId].map(v => (
                             <li key={v.id} className="flex items-center justify-between">
-                              <span>{v.version} – {new Date(v.uploadedAt).toLocaleDateString()}</span>
-                              <Button size="xs" onClick={() => dispatch(downloadVersionAsync(v.id))}>Download</Button>
+                              <span>v{v.version} – {new Date(v.uploadedAt).toLocaleDateString()}</span>
+                              <Button size="sm" onClick={() => handleFileDownload(v.id, v.fileName || "document")}>Download</Button>
                             </li>
                           ))}
                         </ul>
@@ -548,7 +568,7 @@ export default function DocumentManagement() {
                   📃 Print
                 </Button>
                 <Button
-                  variant="primary"
+                  variant="outline"
                   disabled={!previewUrl}
                   onClick={() => {
                     if (previewUrl) {

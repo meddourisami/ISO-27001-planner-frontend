@@ -199,7 +199,7 @@ export default function NonConformitiesManagement() {
       setNewNonConformity(newNonConformity)
     } catch (e: any) {
       toast({ title: 'Save error', description: e.message || e.msg , variant: 'destructive' })
-            console.log(e?.data?.message, e?.message, e.response?.data, e)
+      console.log(e?.data?.body, e?.message, e.response?.data, e)
 
     }
   }
@@ -579,8 +579,8 @@ export default function NonConformitiesManagement() {
                                 <div key={risk.id} className="flex items-center space-x-2">
                                   <Checkbox
                                     id={`risk-${risk.id}`}
-                                    checked={newNonConformity.relatedRisks.includes(risk.id)}
-                                    onCheckedChange={(checked) => handleRiskChange(risk.id, checked as boolean)}
+                                    checked={newNonConformity.relatedRisks.includes(risk.id!)}
+                                    onCheckedChange={(checked) => handleRiskChange(risk.id!, checked as boolean)}
                                   />
                                   <Label htmlFor={`risk-${risk.id}`} className="text-sm">
                                     {risk.title.substring(0, 40)}
@@ -790,14 +790,14 @@ export default function NonConformitiesManagement() {
                         </TableCell>
                         <TableCell>
                           <div className="flex space-x-2">
-                            <Button variant="ghost" size="sm" onClick={() => handleEditNonConformity(item.id)}>
+                            <Button variant="ghost" size="sm" onClick={() => handleEditNonConformity(item.id!)}>
                               Edit
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
                               className="text-red-500"
-                              onClick={() => handleDelete(item.id)}
+                              onClick={() => handleDelete(item.id!)}
                             >
                               Delete
                             </Button>

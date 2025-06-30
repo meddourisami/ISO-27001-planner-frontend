@@ -1,22 +1,30 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { BackendUser } from "@/types";
-import { createAdmin, deleteAdmin, fetchAdmins, updateAdmin } from "@utils/api";
+import { createAdmin, deleteAdminApi, fetchAdmins, updateAdmin } from "@utils/api";
+
+export interface AdminUserCreationRequest {
+  email: string;
+  password: string;
+  companyName: string;
+  scope: string;
+}
 
 export const fetchAdminsAsync = createAsyncThunk<BackendUser[]>(
   'admin/fetchAdmins',
   async () => await fetchAdmins()
 );
 
-export const createAdminAsync = createAsyncThunk<BackendUser, Omit<BackendUser, 'id'>>(
-  'admin/createAdmin',
-  async (dto, { rejectWithValue }) => {
-    try {
-      return await createAdmin(dto);
-    } catch (e: any) {
-      return rejectWithValue(e.message);
-    }
+export const addAdminUserAsync = createAsyncThunk<
+  string, // because the response is a string
+  AdminUserCreationRequest,
+  { rejectValue: string }
+>('admin/add', async (dto, { rejectWithValue }) => {
+  try {
+    return await createAdmin(dto);
+  } catch (e: any) {
+    return rejectWithValue(e.message || "Failed to create admin");
   }
-);
+});
 
 export const updateAdminAsync = createAsyncThunk<BackendUser, BackendUser>(
   'admin/updateAdmin',
@@ -30,12 +38,11 @@ export const updateAdminAsync = createAsyncThunk<BackendUser, BackendUser>(
   }
 );
 
-export const deleteAdminAsync = createAsyncThunk<string, string>(
+export const deleteAdminAsync = createAsyncThunk<string, string, { rejectValue: string }>(
   'admin/deleteAdmin',
-  async (id, { rejectWithValue }) => {
+  async (email, { rejectWithValue }) => {
     try {
-      await deleteAdmin(id);
-      return id;
+      return await deleteAdminApi(email);
     } catch (e: any) {
       return rejectWithValue(e.message);
     }
@@ -68,15 +75,18 @@ export const adminSlice = createSlice({
         state.loading = false;
         state.error = payload as string;
       })
-      .addCase(createAdminAsync.fulfilled, (state, { payload }) => {
-        state.items.push(payload);
+      .addCase(addAdminUserAsync.fulfilled, (state, { payload }) => {
+        //state.items.push(payload);
       })
       .addCase(updateAdminAsync.fulfilled, (state, { payload }) => {
         const idx = state.items.findIndex(u => u.id === payload.id);
         if (idx !== -1) state.items[idx] = payload;
       })
-      .addCase(deleteAdminAsync.fulfilled, (state, { payload: id }) => {
-        state.items = state.items.filter(u => u.id !== id);
+      .addCase(deleteAdminAsync.fulfilled, (state, action) => {
+        state.items = state.items.filter(user => user.email !== action.meta.arg);
+      })
+      .addCase(deleteAdminAsync.rejected, (state, action) => {
+        state.error = action.payload;
       });
   }
 });

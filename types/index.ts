@@ -7,3 +7,4 @@ export * from './task';
 export * from './non-conformity';
 export * from './control';
 export * from './training';
+export * from './company';
