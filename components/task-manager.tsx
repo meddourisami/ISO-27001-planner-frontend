@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Search, Filter, ArrowUpDown, CheckCircle2, Clock, AlertCircle } from "lucide-react"
 import type { AppDispatch, RootState } from "@/lib/store"
-import { addTask, addTaskAsync, deleteTaskAsync, fetchTasksAsync, updateTask, updateTaskAsync } from "@/lib/features/tasks/tasksSlice"
+import { addTaskAsync, deleteTaskAsync, fetchTasksAsync, updateTaskAsync } from "@/lib/features/tasks/tasksSlice"
 import { TaskDto } from "@/types"
 import { useToast } from "@/hooks/use-toast"
 
@@ -79,7 +79,12 @@ export default function TaskManager() {
       };
     
       if (isEditing) {
-        await dispatch(updateTaskAsync(dto)).unwrap();
+        const updatedDto = {
+          ...dto,
+          status: dto.progress === 100 ? "done" : dto.status,
+          progress: dto.status === "done" ? 100 : dto.progress,
+        };
+        await dispatch(updateTaskAsync(updatedDto)).unwrap();
         toast({ title: "Task Updated", description: "Task updated successfully." });
       } else {
         await dispatch(addTaskAsync(dto)).unwrap();

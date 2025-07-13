@@ -12,7 +12,7 @@ import { Progress } from "@/components/ui/progress"
 import { Search, Filter, ArrowUpDown, CheckCircle2, XCircle, AlertTriangle, HelpCircle } from "lucide-react"
 import { AppDispatch, type RootState } from "@/lib/store"
 import { fetchControlsAsync } from "@/lib/features/compliance/complianceSlice"
-import { ControlDto } from "@types/control"
+import { ControlDto } from "@/types"
 
 export default function ComplianceStatus() {
   const { controls, loading, error } = useSelector((state: RootState) => state.compliance);
@@ -60,7 +60,7 @@ export default function ComplianceStatus() {
       }
 
       if (sortBy === "status") {
-        const statusOrder = { implemented: 3, partial: 2, planned: 1, "not-applicable": 0 }
+        const statusOrder = { implemented: 3, partially_implemented: 2, planned: 1, "not-applicable": 0 }
         const aValue = statusOrder[a.status as keyof typeof statusOrder] || 0
         const bValue = statusOrder[b.status as keyof typeof statusOrder] || 0
         return sortOrder === "asc" ? aValue - bValue : bValue - aValue
@@ -80,7 +80,7 @@ export default function ComplianceStatus() {
     switch (status) {
       case "implemented":
         return "bg-green-100 text-green-800 hover:bg-green-200"
-      case "partial":
+      case "partially_implemented":
         return "bg-amber-100 text-amber-800 hover:bg-amber-200"
       case "planned":
         return "bg-blue-100 text-blue-800 hover:bg-blue-200"
@@ -95,7 +95,7 @@ export default function ComplianceStatus() {
     switch (status) {
       case "implemented":
         return <CheckCircle2 className="h-4 w-4 text-green-500" />
-      case "partial":
+      case "partially_implemented":
         return <AlertTriangle className="h-4 w-4 text-amber-500" />
       case "planned":
         return <HelpCircle className="h-4 w-4 text-blue-500" />
@@ -109,7 +109,7 @@ export default function ComplianceStatus() {
   // Calculate compliance statistics
   const totalControls = controls.filter((c) => c.status !== "not-applicable").length
   const implementedControls = controls.filter((c) => c.status === "implemented").length
-  const partialControls = controls.filter((c) => c.status === "partial").length
+  const partialControls = controls.filter((c) => c.status === "partially_implemented").length
   const plannedControls = controls.filter((c) => c.status === "planned").length
   const naControls = controls.filter((c) => c.status === "not-applicable").length
 
@@ -118,7 +118,8 @@ export default function ComplianceStatus() {
 
   // Group controls by clause
   const controlsByClause = processedControls.reduce((acc: Record<string, typeof processedControls>, control) => {
-    const clause = control.id.split(".")[0];
+    const clauseParts = control.id.split(".");
+    const clause = clauseParts.length >= 2 ? `${clauseParts[0]}.${clauseParts[1]}` : control.id;
     if (!acc[clause]) acc[clause] = [];
     acc[clause].push(control);
     return acc;
@@ -129,7 +130,7 @@ export default function ComplianceStatus() {
     .map(([clause, clauseControls]: [string, any]) => {
       const total = clauseControls.filter((c: any) => c.status !== "not-applicable").length
       const implemented = clauseControls.filter((c: any) => c.status === "implemented").length
-      const partial = clauseControls.filter((c: any) => c.status === "partial").length
+      const partial = clauseControls.filter((c: any) => c.status === "partially_implemented").length
 
       return {
         clause,
@@ -152,7 +153,7 @@ export default function ComplianceStatus() {
             <div className="text-2xl font-bold">{compliancePercentage}%</div>
             <Progress value={compliancePercentage} className="h-2 mt-2" />
             <p className="text-xs text-muted-foreground mt-2">
-              {implementedControls} implemented, {partialControls} partial, {plannedControls} planned
+              {implementedControls} implemented, {partialControls} partially_implemented, {plannedControls} planned
             </p>
           </CardContent>
         </Card>
@@ -207,7 +208,7 @@ export default function ComplianceStatus() {
             {clauseCompliance.map((item) => (
               <Card key={item.clause}>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">A.{item.clause} Controls</CardTitle>
+                  <CardTitle className="text-sm font-medium">{item.clause} Controls</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{item.percentage}%</div>

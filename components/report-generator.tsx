@@ -10,6 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FileDown, Printer, Mail } from "lucide-react"
 import type { RootState } from "@/lib/store"
+import { useToast } from "@/hooks/use-toast"
+import { fetchCustomRiskReport } from "@/lib/features/reports/reportsSlice"
+import { useAppDispatch } from "@/lib/hooks"
+import { fetchCustomAssetReportPdf, fetchCustomAuditReportPdf, fetchCustomRiskReportPdf } from "@utils/api"
 
 export default function ReportGenerator() {
   const [reportType, setReportType] = useState("compliance")
@@ -29,6 +33,12 @@ export default function ReportGenerator() {
   const compliance = useSelector((state: RootState) => state.compliance.controls)
   const assets = useSelector((state: RootState) => state.assets.items)
   const audits = useSelector((state: RootState) => state.audits.items)
+  const user = useSelector((state: RootState) => state.auth.user)
+  
+  const dispatch = useAppDispatch();
+
+
+  const { toast } = useToast();
 
   const reportTypes = [
     { id: "compliance", name: "Compliance Status Report" },
@@ -64,7 +74,7 @@ export default function ReportGenerator() {
       { id: "summary", name: "Audit Summary" },
       { id: "findings", name: "Audit Findings" },
       { id: "nonconformities", name: "Non-conformities" },
-      { id: "recommendations", name: "Recommendations" },
+      { id: "audit logs", name: "Audit logs" },
       { id: "followup", name: "Follow-up Actions" },
     ],
     executive: [
@@ -93,14 +103,14 @@ export default function ReportGenerator() {
   const handleReportTypeChange = (value: string) => {
     setReportType(value)
     // Reset selected sections to default for the new report type
-    setSelectedSections(["summary", "details", "charts", "recommendations"])
+    setSelectedSections(["summary"])
   }
 
-  const handleGenerateReport = () => {
+  const handleGenerateReport = async () => {
     setIsGenerating(true)
 
     // Simulate report generation
-    setTimeout(() => {
+    setTimeout(async () => {
       const reportDate = new Date().toLocaleDateString()
       let reportTitle = ""
       let reportStats = ""
@@ -119,30 +129,70 @@ export default function ReportGenerator() {
           break
 
         case "risk":
-          const criticalRisks = risks.filter((risk) => risk.severity === "critical").length
-          const highRisks = risks.filter((risk) => risk.severity === "high").length
-          const openRisks = risks.filter((risk) => risk.status === "open" || risk.status === "in-progress").length
-
-          reportTitle = "Information Security Risk Assessment Report"
-          reportStats = `Total risks: ${risks.length}\nOpen risks: ${openRisks}\nCritical risks: ${criticalRisks}\nHigh risks: ${highRisks}`
+          if (!user?.companyId) {
+            toast({ title: 'Error', description: 'Missing company ID', variant: 'destructive' });
+            setIsGenerating(false);
+            return;
+          }
+          try {
+            console.log(selectedSections, "selected sections ..")
+            const blob: Blob = await fetchCustomRiskReportPdf(user.companyId, selectedSections);
+            const url = URL.createObjectURL(blob);
+            setGeneratedReport(url);
+            setIsGenerating(false);
+            setActiveTab('preview');
+          } catch (err: any) {
+            toast({ title: 'Error', description: err, variant: 'destructive' });
+            setIsGenerating(false);
+          }
           break
 
         case "asset":
-          const criticalAssets = assets.filter((asset) => asset.value === "critical").length
-          const confidentialAssets = assets.filter(
-            (asset) => asset.classification === "confidential" || asset.classification === "restricted",
-          ).length
-
-          reportTitle = "Information Asset Inventory Report"
-          reportStats = `Total assets: ${assets.length}\nCritical assets: ${criticalAssets}\nConfidential/Restricted assets: ${confidentialAssets}`
+          setIsGenerating(true);
+          if (!user?.companyId) {
+            toast({ title: 'Error', description: 'Missing company ID', variant: 'destructive' });
+            setIsGenerating(false);
+            return;
+          }
+          try {
+            const blob = await fetchCustomAssetReportPdf(user.companyId, selectedSections);
+            const url = URL.createObjectURL(blob);
+            setGeneratedReport(url);
+            setActiveTab("preview");
+          } catch (e: any) {
+            toast({
+              title: "Error generating report",
+              description: e.message || "Unable to fetch asset report",
+              variant: "destructive",
+            });
+          } finally {
+            setIsGenerating(false);
+          }
+          return;
           break
 
         case "audit":
-          const completedAudits = audits.filter((audit) => audit.status === "completed").length
-          const nonConformities = audits.reduce((total, audit) => total + audit.nonConformities, 0)
-
-          reportTitle = "Information Security Audit Report"
-          reportStats = `Total audits: ${audits.length}\nCompleted audits: ${completedAudits}\nTotal non-conformities: ${nonConformities}`
+          setIsGenerating(true);
+          if (!user?.companyId) {
+            toast({ title: 'Error', description: 'Missing company ID', variant: 'destructive' });
+            setIsGenerating(false);
+            return;
+          }
+          try {
+            const blob = await fetchCustomAuditReportPdf(user?.companyId, selectedSections);
+            const url = URL.createObjectURL(blob);
+            setGeneratedReport(url);
+            setActiveTab("preview");
+          } catch (e: any) {
+            toast({
+              title: "Error generating audit report",
+              description: e.message || "Unable to fetch audit report",
+              variant: "destructive",
+            });
+          } finally {
+            setIsGenerating(false);
+          }
+          return;
           break
 
         default:
@@ -150,28 +200,49 @@ export default function ReportGenerator() {
           reportStats = `Generated on: ${reportDate}`
       }
 
-      const reportContent = `${reportTitle}\n\nGenerated on: ${reportDate}\n\nIncluded sections: ${selectedSections.join(", ")}\n\n${reportStats}\n\nThis report contains confidential information and should be handled according to the organization's information classification policy.`
+      //const reportContent = `${reportTitle}\n\nGenerated on: ${reportDate}\n\nIncluded sections: ${selectedSections.join(", ")}\n\n${reportStats}\n\nThis report contains confidential information and should be handled according to the organization's information classification policy.`
 
-      setGeneratedReport(reportContent)
+      //setGeneratedReport(reportContent)
       setIsGenerating(false)
       setActiveTab("preview")
     }, 1500)
   }
 
   const handleExportReport = () => {
-    // In a real application, this would trigger a download of the report
-    alert(`Report would be exported as ${format.toUpperCase()} file in a real application`)
-  }
+    if (!generatedReport?.startsWith("blob:")) {
+      toast({ title: "Export Error", description: "Only PDF reports can be exported.", variant: "destructive" });
+      return;
+    }
+
+    const link = document.createElement("a");
+    link.href = generatedReport;
+    link.download = `report.${format}`;
+    link.click();
+  };
 
   const handlePrintReport = () => {
-    // In a real application, this would open the print dialog
-    alert("Print dialog would open in a real application")
-  }
+    if (!generatedReport?.startsWith("blob:")) {
+      toast({ title: "Print Error", description: "Only PDF reports can be printed.", variant: "destructive" });
+      return;
+    }
+
+    const iframe = document.createElement("iframe");
+    iframe.style.display = "none";
+    iframe.src = generatedReport;
+    document.body.appendChild(iframe);
+    iframe.onload = () => {
+      iframe.contentWindow?.print();
+      document.body.removeChild(iframe);
+    };
+  };
 
   const handleEmailReport = () => {
-    // In a real application, this would open an email dialog
-    alert("Email dialog would open in a real application")
-  }
+    toast({
+      title: "Feature not implemented",
+      description: "Emailing reports is coming soon!",
+      variant: "default",
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -254,7 +325,17 @@ export default function ReportGenerator() {
             <TabsContent value="preview" className="space-y-4">
               {generatedReport && (
                 <>
-                  <div className="border rounded-md p-4 min-h-[300px] whitespace-pre-line">{generatedReport}</div>
+                  {generatedReport.startsWith("blob:") ? (
+                    <iframe
+                      src={generatedReport}
+                      className="w-full h-[800px] border rounded-md"
+                      title="Generated Report"
+                    />
+                  ) : (
+                    <div className="border rounded-md p-4 min-h-[300px] whitespace-pre-line">
+                      {generatedReport}
+                    </div>
+                  )}
 
                   <div className="flex flex-wrap gap-2">
                     <Button onClick={handleExportReport} className="flex items-center gap-2">

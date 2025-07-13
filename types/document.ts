@@ -5,8 +5,8 @@ export interface DocumentDto {
   type: string;
   status: string;
   version: string;
-  ownerEmail: string;
-  approverEmail: string;
+  owner: string;
+  approver: string;
   approvalDate: string;
   reviewDate: string;
   content: string;

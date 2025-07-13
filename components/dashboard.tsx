@@ -16,6 +16,8 @@ import TaskManager from "@/components/task-manager"
 import ComplianceStatus from "@/components/compliance-status"
 import AssetsManagement from "@/components/assets-management"
 import NotificationsPanel from "@/components/notifications-panel"
+import NonConformitiesManagement from "./nonconformities-management"
+import { useAppSelector } from "@/lib/hooks"
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview")
@@ -24,7 +26,8 @@ export default function Dashboard() {
   // Get data from Redux store
   const risks = useSelector((state: RootState) => state.risks.items)
   const tasks = useSelector((state: RootState) => state.tasks.items)
-  const documents = useSelector((state: RootState) => state.documents.items)
+  const documents = useAppSelector((state) => state.documents.items);
+  const totalElements = useAppSelector((state) => state.documents.totalElements);
   const audits = useSelector((state: RootState) => state.audits.items)
   const compliance = useSelector((state: RootState) => state.compliance.controls)
   const training = useSelector((state: RootState) => state.training)
@@ -60,8 +63,8 @@ export default function Dashboard() {
     const taskCompletionRate = tasks.length > 0 ? Math.round((completedTasksCount / tasks.length) * 100) : 0
 
     // Document metrics
-    const approvedDocs = documents.filter((doc) => doc.status === "approved").length
-    const docApprovalRate = documents.length > 0 ? Math.round((approvedDocs / documents.length) * 100) : 0
+    const approvedDocs = documents.filter(d => d.status === 'Approved').length;
+    const docApprovalRate = totalElements > 0 ? Math.round((approvedDocs / totalElements) * 100) : 0;
 
     // Compliance metrics
     const implementedControls = compliance.filter((control) => control.status === "implemented").length
@@ -105,7 +108,8 @@ export default function Dashboard() {
     });
 
     const controlsByClause = processedControls.reduce((acc: Record<string, typeof processedControls>, control) => {
-      const clause = control.id.split(".")[0];
+      const clauseParts = control.id.split(".");
+      const clause = clauseParts.length >= 2 ? `${clauseParts[0]}.${clauseParts[1]}` : control.id;
       if (!acc[clause]) acc[clause] = [];
       acc[clause].push(control);
       return acc;
@@ -147,7 +151,7 @@ export default function Dashboard() {
       taskCompletionRate,
       docApprovalRate,
       approvedDocs,
-      totalDocs: documents.length,
+      totalDocs: totalElements,
       complianceRate,
       implementedControls,
       partialControls,
@@ -183,13 +187,14 @@ export default function Dashboard() {
           </div>
 
           <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList className="grid grid-cols-7 w-full max-w-4xl">
+            <TabsList className="grid grid-cols-8 w-full max-w-5xl">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="risks">Risk Assessment</TabsTrigger>
               <TabsTrigger value="assets">Assets</TabsTrigger>
               <TabsTrigger value="documents">Documents</TabsTrigger>
               <TabsTrigger value="audits">Audits</TabsTrigger>
               <TabsTrigger value="tasks">Tasks</TabsTrigger>
+              <TabsTrigger value="non conformities">Non conformities</TabsTrigger>
               <TabsTrigger value="compliance">Compliance</TabsTrigger>
             </TabsList>
 
@@ -393,6 +398,10 @@ export default function Dashboard() {
 
             <TabsContent value="compliance">
               <ComplianceStatus />
+            </TabsContent>
+
+            <TabsContent value="non conformities">
+              <NonConformitiesManagement />
             </TabsContent>
           </Tabs>
         </div>

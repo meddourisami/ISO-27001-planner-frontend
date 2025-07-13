@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import Dashboard from "@/components/dashboard"
 import { Providers } from "@/components/providers"
@@ -11,7 +11,7 @@ import { fetchAssets } from "@/lib/features/assets/assetsSlice"
 import { AppDispatch } from "@/lib/store"
 import { useDispatch } from "react-redux"
 import { fetchRisks } from "@/lib/features/risks/risksSlice"
-import { fetchDocumentsAsync } from "@/lib/features/documents/documentsSlice"
+import { fetchDocumentsAsync, fetchDocumentsPageAsync } from "@/lib/features/documents/documentsSlice"
 import { fetchAuditsAsync } from "@/lib/features/audits/auditsSlice"
 import { fetchTasksAsync } from "@/lib/features/tasks/tasksSlice"
 import { fetchNonConformitiesAsync } from "@/lib/features/nonconformities/nonconformitiesSlice"
@@ -25,6 +25,12 @@ export default function Home() {
   const pathname = usePathname();
   const dispatch = useDispatch<AppDispatch>()
   const { user, mfaRequired, status } = useAppSelector((state) => state.auth)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterType, setFilterType] = useState("all")
+  const [sortBy, setSortBy] = useState("title")
+  const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('asc');
+  const [page, setPage] = useState(0);
+  const size = 10;
 
   useEffect(() => {
     dispatch(fetchCurrentUser())
@@ -53,7 +59,15 @@ export default function Home() {
     if (user?.companyId) {
       dispatch(fetchAssets(user.companyId))
       dispatch(fetchRisks(user.companyId))
-      dispatch(fetchDocumentsAsync(user.companyId))
+      dispatch(fetchDocumentsPageAsync({
+            companyId: user.companyId,
+            page,
+            size,
+            search: searchTerm,
+            type: filterType,
+            sortBy,
+            sortOrder
+          }));
       dispatch(fetchAuditsAsync(user.companyId))
       dispatch(fetchTasksAsync(user.companyId))
       dispatch(fetchNonConformitiesAsync(user.companyId))

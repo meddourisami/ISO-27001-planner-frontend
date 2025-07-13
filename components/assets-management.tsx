@@ -476,12 +476,12 @@ export default function AssetsManagement() {
                           )}
                         </div>
                         <div className="col-span-2">
-                          <Label htmlFor="controls">Security Controls</Label>
+                          <Label htmlFor="controls">Security Measures</Label>
                           <Textarea
                             id="controls"
                             value={newAsset.controls}
                             onChange={(e) => setNewAsset({ ...newAsset, controls: e.target.value })}
-                            placeholder="List security controls protecting this asset"
+                            placeholder="List security measures protecting this asset"
                           />
                         </div>
                         <div className="col-span-2">

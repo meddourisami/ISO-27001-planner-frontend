@@ -1,10 +1,13 @@
 import { DocumentDto, DocumentVersionDto } from "@/types";
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import { createDocumentWithFile, fetchDocuments, getVersionHistoryList, searchInDocuments, updateDocumentWithFile } from "@utils/api";
+import { approveDocumentApi, createDocumentWithFile, fetchCompanyDocuments, getVersionHistoryList, PaginatedResponse, searchInDocuments, updateDocumentWithFile } from "@utils/api";
 
 interface DocumentState {
   items: DocumentDto[];
   versions: Record<string, DocumentVersionDto[]>;
+  page: number;
+  totalPages: number;
+  totalElements: number;
   loading: boolean;
   error?: string;
 }
@@ -12,15 +15,39 @@ interface DocumentState {
 const initialState: DocumentState = {
   items: [],
   versions: {},
+  page: 0,
+  totalPages: 0,
+  totalElements: 0,
   loading: false,
 };
 
 // Async Thunks
-export const fetchDocumentsAsync = createAsyncThunk<DocumentDto[], number>(
-  'documents/fetchAll',
-  async (companyId, { rejectWithValue }) => {
+
+export const fetchDocumentsPageAsync = createAsyncThunk<
+  PaginatedResponse<DocumentDto>,
+  {
+    companyId: number;
+    page: number;
+    size: number;
+    search?: string;
+    type?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  },
+  { rejectValue: string }
+>(
+  'documents/fetchPage',
+  async (args, { rejectWithValue }) => {
     try {
-      return await fetchDocuments(companyId);
+      return await fetchCompanyDocuments(
+        args.companyId,
+        args.page,
+        args.size,
+        args.search,
+        args.type,
+        args.sortBy,
+        args.sortOrder
+      );
     } catch (err: any) {
       return rejectWithValue(err.message);
     }
@@ -72,6 +99,21 @@ export const searchInDocumentAsync = createAsyncThunk<DocumentVersionDto[], stri
   }
 );
 
+export const approveDocumentAsync = createAsyncThunk<
+  string,
+  string,
+  { rejectValue: string }
+>(
+  'documents/approve',
+  async (id, { rejectWithValue }) => {
+    try {
+      return await approveDocumentApi(id);
+    } catch (e: any) {
+      return rejectWithValue(e.message);
+    }
+  }
+);
+
 // Slice definition
 const documentSlice = createSlice({
   name: 'documents',
@@ -83,41 +125,47 @@ const documentSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchDocumentsAsync.pending, (state) => {
-        state.loading = true;
+      .addCase(fetchDocumentsPageAsync.pending, (s) => { s.loading = true; s.error = undefined; })
+      .addCase(fetchDocumentsPageAsync.fulfilled, (s, { payload }) => {
+        s.loading = false;
+        s.items = payload.content;
+        s.totalPages = payload.totalPages;
+        s.totalElements = payload.totalElements;
+        s.page = payload.number;
       })
-      .addCase(fetchDocumentsAsync.fulfilled, (state, action) => {
-        state.items = action.payload;
-        state.loading = false;
+      .addCase(fetchDocumentsPageAsync.rejected, (s, { payload }) => {
+        s.loading = false;
+        s.error = payload;
       })
-      .addCase(fetchDocumentsAsync.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.error.message;
-      });
-
-    builder
       .addCase(createDocumentAsync.fulfilled, (state, action) => {
         state.items.push(action.payload);
-      });
-
-    builder.addCase(fetchVersionHistoryAsync.pending, (state) => {
-      state.loading = true;
-      state.error = undefined;
-    });
-    builder.addCase(fetchVersionHistoryAsync.fulfilled, (state, action) => {
-      const docId = action.meta.arg;
-      state.versions[docId] = action.payload;
-      state.loading = false;
-    });
-    builder.addCase(fetchVersionHistoryAsync.rejected, (state, action) => {
-      state.loading = false;
-      state.error = action.payload as string;
-    });
-
-    builder
+      })
+      .addCase(fetchVersionHistoryAsync.pending, (state) => {
+        state.loading = true;
+        state.error = undefined;
+      })
+      .addCase(fetchVersionHistoryAsync.fulfilled, (state, action) => {
+        const docId = action.meta.arg;
+        state.versions[docId] = action.payload;
+        state.loading = false;
+      })
+      .addCase(fetchVersionHistoryAsync.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
       .addCase(searchInDocumentAsync.fulfilled, (state, action) => {
         // Flatten or handle global version search results as needed
         console.log("Search results:", action.payload);
+      })
+      .addCase(approveDocumentAsync.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(approveDocumentAsync.fulfilled, (state, action) => {
+        state.loading = false;
+      })
+      .addCase(approveDocumentAsync.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload ?? action.error.message;
       });
   },
 });

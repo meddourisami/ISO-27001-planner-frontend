@@ -21,16 +21,23 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Search, Filter, ArrowUpDown, FileText, Download, Eye, EditIcon } from "lucide-react"
 import { AppDispatch, type RootState } from "@/lib/store"
-import { createDocumentAsync, fetchDocumentsAsync, fetchVersionHistoryAsync, updateDocumentAsync } from "@/lib/features/documents/documentsSlice"
+import { approveDocumentAsync, createDocumentAsync, fetchDocumentsPageAsync, fetchVersionHistoryAsync, updateDocumentAsync } from "@/lib/features/documents/documentsSlice"
 import { downloadVersion } from "@utils/api"
 import { useToast } from "@/hooks/use-toast"
 import { DocumentDto } from "@/types"
 import { useDropzone } from "react-dropzone";
+import { useAppSelector } from "@/lib/hooks"
 
 
 export default function DocumentManagement() {
   const dispatch = useDispatch<AppDispatch>();
-  const documents = useSelector((state: RootState) => state.documents.items);
+  const {
+    items: documents,
+    loading,
+    error,
+    totalPages,
+    totalElements,
+  } = useAppSelector((state) => state.documents);
   const versionHistory = useSelector((state: RootState) => state.documents.versions);
   const user = useSelector((s: RootState) => s.auth.user);
   const { toast } = useToast()
@@ -38,16 +45,15 @@ export default function DocumentManagement() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("all")
   const [sortBy, setSortBy] = useState("title")
-  const [sortOrder, setSortOrder] = useState("asc")
-
+  const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('asc');
   const [newDocument, setNewDocument] = useState<Omit<DocumentDto, "id" | "companyId">>({
     title: "",
     description: "",
     type: "policy",
     status: "draft",
     version: "1.0",
-    ownerEmail: user?.email || "",
-    approverEmail: "",
+    owner: user?.email || "",
+    approver: "",
     approvalDate: "",
     reviewDate: "",
     content: "",
@@ -61,11 +67,22 @@ export default function DocumentManagement() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
+  const [page, setPage] = useState(0);
+  const size = 10;
+
   useEffect(() => {
-    if (user?.companyId) {
-      dispatch(fetchDocumentsAsync(user?.companyId));
-    }
-  }, [dispatch, user?.companyId]);
+  if (user?.companyId != null) {
+    dispatch(fetchDocumentsPageAsync({
+      companyId: user.companyId,
+      page,
+      size,
+      search: searchTerm,
+      type: filterType,
+      sortBy,
+      sortOrder
+    }));
+  }
+}, [dispatch, user?.companyId, page, size, searchTerm, filterType, sortBy, sortOrder]);
 
   useEffect(() => {
     // Prefetch versions for all documents once
@@ -79,7 +96,7 @@ export default function DocumentManagement() {
 
     const dto: Omit<DocumentDto, "id"> = {
       ...newDocument,
-      ownerEmail: user.email,
+      owner: user.email,
       companyId: user.companyId,
     };
     console.log( " " + dto.version +  "   file version ")
@@ -112,8 +129,8 @@ export default function DocumentManagement() {
       type: "policy",
       status: "draft",
       version: "1.0",
-      ownerEmail: user?.email || "",
-      approverEmail: "",
+      owner: user?.email || "",
+      approver: "",
       approvalDate: "",
       reviewDate: "",
       content: "",
@@ -131,8 +148,8 @@ export default function DocumentManagement() {
       type: doc.type,
       status: doc.status,
       version: doc.version,
-      ownerEmail: doc.ownerEmail,
-      approverEmail: doc.approverEmail,
+      owner: doc.owner,
+      approver: doc.approver,
       approvalDate: doc.approvalDate ?? "",
       reviewDate: doc.reviewDate ?? "",
       content: doc.content ?? "",
@@ -207,6 +224,19 @@ export default function DocumentManagement() {
     }
   }
 
+  const handleApprove = async (id : String) => {
+    try {
+      const msg = await dispatch(approveDocumentAsync(id)).unwrap();
+      toast({ title: 'Approved', description: msg });
+    } catch (err: any) {
+      toast({
+        title: 'Error',
+        description: typeof err === 'string' ? err : err.message || 'An error occurred.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const filteredDocuments = documents
     .filter(
       (doc) =>
@@ -249,7 +279,7 @@ export default function DocumentManagement() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Document Management</CardTitle>
-              <CardDescription>Manage your ISMS policies, procedures, and records</CardDescription>
+              <CardDescription>Manage your ISMS policies, procedures, and records. Explore our templates as a start point!</CardDescription>
             </div>
             <Dialog open={dialogOpen} onOpenChange={(v) => { if (!v) resetForm(); setDialogOpen(v); }}>
               <DialogTrigger asChild>
@@ -324,12 +354,12 @@ export default function DocumentManagement() {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="ownerEmail">Owner</Label>
-                        <Input id="ownerEmail" value={newDocument.ownerEmail} onChange={e => setNewDocument({ ...newDocument, ownerEmail: e.target.value })} />
+                        <Label htmlFor="owner">Owner</Label>
+                        <Input id="owner" value={newDocument.owner} onChange={e => setNewDocument({ ...newDocument, owner: e.target.value })} />
                       </div>
                       <div>
                         <Label htmlFor="approver">Approver</Label>
-                        <Input id="approver" value={newDocument.approverEmail} onChange={e => setNewDocument({ ...newDocument, approverEmail: e.target.value })} />
+                        <Input id="approver" value={newDocument.approver} onChange={e => setNewDocument({ ...newDocument, approver: e.target.value })} />
                       </div>
                     </div>
                     <div>
@@ -483,14 +513,14 @@ export default function DocumentManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredDocuments.length === 0 ? (
+              {documents.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
                     No documents found. Add a new document to get started.
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredDocuments.map((doc) => (
+                documents.map((doc) => (
                   <TableRow key={doc.id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center">
@@ -504,8 +534,8 @@ export default function DocumentManagement() {
                         {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
                       </Badge>
                     </TableCell>
-                    <TableCell>{doc.version}</TableCell>
-                    <TableCell>{doc.ownerEmail}</TableCell>
+                    <TableCell>v{doc.version}</TableCell>
+                    <TableCell>{doc.owner}</TableCell>
                     <TableCell>
                       <div className="flex space-x-2">
                         <Button variant="ghost" size="icon" onClick={() => handleView(doc.id)}>
@@ -517,7 +547,7 @@ export default function DocumentManagement() {
                         <Button variant="ghost" size="icon" onClick={() => handleDownload(doc.id)}>
                           <Download className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="default">
+                        <Button variant="outline" size="default" onClick={() => handleApprove(doc.id)}>
                           Approve
                         </Button>
                       </div>
@@ -527,6 +557,23 @@ export default function DocumentManagement() {
               )}
             </TableBody>
           </Table>
+          <div className="flex justify-between items-center mt-4">
+            <button
+              disabled={page <= 0}
+              onClick={() => setPage((p) => Math.max(p - 1, 0))}
+              className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <span>Page {page + 1} of {totalPages}</span>
+            <button
+              disabled={page + 1 >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+              className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
           <Dialog
             open={isPreviewOpen}
             onOpenChange={(open) => {

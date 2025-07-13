@@ -134,8 +134,33 @@ export async function deleteAssetApi(id: string): Promise<void> {
 
 // document API endpoints
 
-export async function fetchDocuments(companyId: number): Promise<DocumentDto[]> {
-  return (await api.get(`/documents/company/${companyId}`)).data;
+//export async function fetchDocuments(companyId: number): Promise<DocumentDto[]> {
+//  return (await api.get(`/documents/company/${companyId}`)).data;
+//}
+
+export interface PaginatedResponse<T> {
+  content: T[];
+  totalPages: number;
+  totalElements: number;
+  number: number; // current page index (0‑based)
+}
+
+export async function fetchCompanyDocuments(
+  companyId: number,
+  page = 0,
+  size = 10,
+  search?: string,
+  type?: string,
+  sortBy = 'title',
+  sortOrder: 'asc' | 'desc' = 'asc'
+): Promise<PaginatedResponse<DocumentDto>> {
+  const params: Record<string, any> = { page, size, sortBy, sortOrder };
+  if (search) params.search = search;
+  if (type && type !== 'all') params.type = type;
+
+  return (await api.get<PaginatedResponse<DocumentDto>>(
+    `/documents/company/${companyId}`, { params }
+  )).data;
 }
 
 export async function createDocumentWithFile(dto: DocumentDto, file: File): Promise<DocumentDto> {
@@ -162,6 +187,11 @@ export async function updateDocumentWithFile(
     headers: { "Content-Type": "multipart/form-data" },
   });
   return res.data;
+}
+
+export async function approveDocumentApi(id: string): Promise<string> {
+  const res = await api.put(`/documents/${id}/approve`);
+  return res.data; 
 }
 
 export async function getVersionHistoryList(documentId: string): Promise<DocumentVersionDto[]> {
@@ -228,8 +258,6 @@ export async function updateNonConformityApi(
 ): Promise<NonConformityDto> {
   const trimmedId = id.trim();
   const url = `/nonconformities/${trimmedId}`;
-  console.log("📡 Sending PUT request to:", url);
-  console.log("📦 Payload:", dto);
   return (await api.put(url, dto)).data;
 }
 
@@ -360,4 +388,41 @@ export async function exportPdf(companyId: number): Promise<Blob> {
 export async function exportPdfTable(companyId: number): Promise<Blob> {
   const res = await api.get(`/audit-logs/export/pdf-table/${companyId}`, { responseType: 'blob' });
   return res.data;
+}
+
+
+// Reports API endpoints
+
+export async function fetchCustomRiskReportPdf(
+  companyId: number,
+  sections: string[]
+): Promise<Blob> {
+  const response = await api.get(`/risks/export/pdf-table/${companyId}`, {
+    params: { sections: sections.join(','), },
+    responseType: 'blob',
+  });
+  return response.data;
+}
+
+
+export async function fetchCustomAssetReportPdf(
+  companyId: number,
+  sections: string[]
+): Promise<Blob> {
+  const response = await api.get(`/assets/export/pdf-table/${companyId}`, {
+    params: { sections: sections.join(','), },
+    responseType: 'blob',
+  });
+  return response.data;
+}
+
+export async function fetchCustomAuditReportPdf(
+  companyId: number,
+  sections: string[]
+): Promise<Blob> {
+  const response = await api.get(`/audit-logs/export/audit/pdf-table/${companyId}`, {
+    params: { sections: sections.join(','), },
+    responseType: 'blob',
+  });
+  return response.data;
 }

@@ -37,6 +37,7 @@ export default function NonConformitiesManagement() {
   const { items: nonconformities, loading, error } = useSelector((state: RootState) => state.nonconformities)
   const controls = useSelector((state: RootState) => state.compliance.controls)
   const risks = useSelector((state: RootState) => state.risks.items)
+  const audits = useSelector((state: RootState) => state.audits.items)
   const user = useSelector((state: RootState) => state.auth.user)
   const dispatch = useDispatch<AppDispatch>()
 
