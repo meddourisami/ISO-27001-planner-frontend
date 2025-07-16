@@ -1,4 +1,4 @@
-import { AssetDto, AuditDto, BackendUser, CompanyDTO, ControlDto, DocumentDto, DocumentVersionDto, EmployeeDto, NonConformityDto, RiskDto, TaskDto, TrainingDto, User } from "@/types";
+import { AssetDto, AuditDto, AuditLog, BackendUser, CompanyDTO, ControlDto, DocumentDto, DocumentVersionDto, EmployeeDto, NonConformityDto, RiskDto, TaskDto, TrainingDto, User } from "@/types";
 import api from "../lib/axios";
 
 
@@ -425,4 +425,25 @@ export async function fetchCustomAuditReportPdf(
     responseType: 'blob',
   });
   return response.data;
+}
+
+
+// audit logs endpoints
+
+export async function fetchAuditLogs(
+  user?: string,
+  action?: string,
+  entity?: string,
+  from?: string,
+  to?: string
+): Promise<AuditLog[]> {
+  const params: any = {};
+  if (user) params.user = user;
+  if (action) params.action = action;
+  if (entity) params.entity = entity;
+  if (from) params.from = from;
+  if (to) params.to = to;
+
+  const res = await api.get('/audit-logs', { params });
+  return res.data;
 }

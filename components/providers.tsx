@@ -13,6 +13,7 @@ import { fetchRisks } from "@/lib/features/risks/risksSlice"
 import { fetchTasksAsync } from "@/lib/features/tasks/tasksSlice"
 import { fetchControlsAsync } from "@/lib/features/compliance/complianceSlice"
 import { fetchDocumentsPageAsync } from "@/lib/features/documents/documentsSlice"
+import { fetchAuditLogsAsync } from "@/lib/features/auditLogs/auditlogsSlice"
 
 interface ProvidersProps {
   children: ReactNode
@@ -46,6 +47,7 @@ function AppInitializer() {
             sortOrder
           }));
       dispatch(fetchAuditsAsync(user.companyId))
+      dispatch(fetchAuditLogsAsync());
       dispatch(fetchTasksAsync(user.companyId))
       dispatch(fetchNonConformitiesAsync(user.companyId))
       dispatch(fetchControlsAsync(user.companyId))

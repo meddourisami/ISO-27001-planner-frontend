@@ -9,6 +9,7 @@ import trainingReducer from "@/lib/features/training/trainingSlice"
 import nonconformitiesReducer from "@/lib/features/nonconformities/nonconformitiesSlice"
 import authReducer from "@/lib/features/auth/authSlice"
 import adminReducer from "@/lib/features/admin/adminSlice"
+import auditLogsReducer from "@/lib/features/auditLogs/auditlogsSlice"
 import { listenerMiddleware } from "./features/listeners/listenerMiddleware"
 
 
@@ -20,6 +21,7 @@ export const store = configureStore({
     risks: risksReducer,
     documents: documentsReducer,
     audits: auditsReducer,
+    auditLogs: auditLogsReducer,
     tasks: tasksReducer,
     compliance: complianceReducer,
     assets: assetsReducer,

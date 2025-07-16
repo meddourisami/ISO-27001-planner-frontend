@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useSelector } from "react-redux"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,7 +17,9 @@ import ComplianceStatus from "@/components/compliance-status"
 import AssetsManagement from "@/components/assets-management"
 import NotificationsPanel from "@/components/notifications-panel"
 import NonConformitiesManagement from "./nonconformities-management"
-import { useAppSelector } from "@/lib/hooks"
+import { useAppDispatch, useAppSelector } from "@/lib/hooks"
+import { fetchAuditLogsAsync } from "@/lib/features/auditLogs/auditlogsSlice"
+import { formatDistanceToNow } from "date-fns"
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview")
@@ -31,6 +33,16 @@ export default function Dashboard() {
   const audits = useSelector((state: RootState) => state.audits.items)
   const compliance = useSelector((state: RootState) => state.compliance.controls)
   const training = useSelector((state: RootState) => state.training)
+  const dispatch = useAppDispatch();
+  const auditLogs = useAppSelector((s) => s.auditLogs.items);
+  const loading = useAppSelector((s) => s.auditLogs.loading);
+
+  const clauseLabels: Record<string, string> = {
+      "A.5": "Organizational measures",
+      "A.6": "Measures related to people",
+      "A.7": "Physical measures",
+      "A.8": "Technological measures",
+    };
 
   // Calculate dashboard metrics
   const dashboardMetrics = useMemo(() => {
@@ -115,6 +127,8 @@ export default function Dashboard() {
       return acc;
     }, {} as Record<string, typeof processedControls>);
 
+    
+
   // Calculate compliance by clause
   const clauseCompliance = Object.entries(controlsByClause)
     .map(([clause, clauseControls]: [string, any]) => {
@@ -132,14 +146,13 @@ export default function Dashboard() {
     })
     .sort((a, b) => a.clause.localeCompare(b.clause, undefined, { numeric: true }))
 
+
     // Recent activities (simulated)
-    const recentActivities = [
-      { title: "Risk Assessment Updated", time: "2 hours ago", user: "John Doe" },
-      { title: "Information Security Policy Approved", time: "Yesterday", user: "Sarah Chen" },
-      { title: "New Vulnerability Identified", time: "2 days ago", user: "Mike Johnson" },
-      { title: "Audit Finding Resolved", time: "3 days ago", user: "Emily Wilson" },
-      { title: "Employee Training Completed", time: "1 week ago", user: "Team" },
-    ]
+    const recentActivities = auditLogs.slice(0, 5).map((log) => ({
+      title: `${log.actionType} ${log.entityType}`,
+      time: formatDistanceToNow(new Date(log.timestamp), { addSuffix: true }),
+      user: log.actorEmail,
+    }));
 
     return {
       openRisks: openRisks.length,
@@ -345,7 +358,7 @@ export default function Dashboard() {
                             className="w-8 bg-primary rounded-t-sm"
                             style={{ height: `${item.percentage * 1.5}px` }}
                           ></div>
-                          <div className="text-xs mt-2">{item.clause}</div>
+                          <div className="text-xs mt-2">{item.clause} {clauseLabels[item.clause] && `- ${clauseLabels[item.clause]}`}</div>
                         </div>
                       ))}
                     </div>

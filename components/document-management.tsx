@@ -298,17 +298,17 @@ export default function DocumentManagement() {
                     {/* Form fields */}
                     <div>
                       <Label htmlFor="title">Title</Label>
-                      <Input id="title" value={newDocument.title} onChange={e => setNewDocument({ ...newDocument, title: e.target.value })} />
+                      <Input id="title" value={newDocument.title ?? ""} onChange={e => setNewDocument({ ...newDocument, title: e.target.value })} />
                     </div>
                     <div>
                       <Label htmlFor="description">Description</Label>
-                      <Textarea id="description" value={newDocument.description} onChange={e => setNewDocument({ ...newDocument, description: e.target.value })} />
+                      <Textarea id="description" value={newDocument.description ?? ""} onChange={e => setNewDocument({ ...newDocument, description: e.target.value })} />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="type">Type</Label>
                         <Select
-                          value={newDocument.type}
+                          value={newDocument.type  ?? ""}
                           onValueChange={(v) => setNewDocument({ ...newDocument, type: v })}
                         >
                           <SelectTrigger id="type">
@@ -326,7 +326,7 @@ export default function DocumentManagement() {
                       <div>
                         <Label htmlFor="status">Status</Label>
                         <Select
-                          value={newDocument.status}
+                          value={newDocument.status  ?? ""}
                           onValueChange={(v) => setNewDocument({ ...newDocument, status: v })}
                         >
                           <SelectTrigger id="status">
@@ -345,30 +345,30 @@ export default function DocumentManagement() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="version">Version</Label>
-                        <Input id="version" value={newDocument.version} onChange={e => setNewDocument({ ...newDocument, version: e.target.value })} />
+                        <Input id="version" value={newDocument.version  ?? ""} onChange={e => setNewDocument({ ...newDocument, version: e.target.value })} />
                       </div>
                       <div>
                         <Label htmlFor="approvalDate">Approval Date</Label>
-                        <Input id="approvalDate" type="date" value={newDocument.approvalDate} onChange={e => setNewDocument({ ...newDocument, approvalDate: e.target.value })} />
+                        <Input id="approvalDate" type="date" value={newDocument.approvalDate  ?? ""} onChange={e => setNewDocument({ ...newDocument, approvalDate: e.target.value })} />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="owner">Owner</Label>
-                        <Input id="owner" value={newDocument.owner} onChange={e => setNewDocument({ ...newDocument, owner: e.target.value })} />
+                        <Input id="owner" value={newDocument.owner  ?? ""} onChange={e => setNewDocument({ ...newDocument, owner: e.target.value })} />
                       </div>
                       <div>
                         <Label htmlFor="approver">Approver</Label>
-                        <Input id="approver" value={newDocument.approver} onChange={e => setNewDocument({ ...newDocument, approver: e.target.value })} />
+                        <Input id="approver" value={newDocument.approver  ?? ""} onChange={e => setNewDocument({ ...newDocument, approver: e.target.value })} />
                       </div>
                     </div>
                     <div>
                       <Label htmlFor="reviewDate">Next Review</Label>
-                      <Input id="reviewDate" type="date" value={newDocument.reviewDate} onChange={e => setNewDocument({ ...newDocument, reviewDate: e.target.value })} />
+                      <Input id="reviewDate" type="date" value={newDocument.reviewDate  ?? ""} onChange={e => setNewDocument({ ...newDocument, reviewDate: e.target.value })} />
                     </div>
                     <div>
                       <Label>Content / Summary</Label>
-                      <Textarea value={newDocument.content} onChange={e => setNewDocument({ ...newDocument, content: e.target.value })} />
+                      <Textarea value={newDocument.content  ?? ""} onChange={e => setNewDocument({ ...newDocument, content: e.target.value })} />
                     </div>
 
                     {/* File upload */}
@@ -412,7 +412,7 @@ export default function DocumentManagement() {
               <Input
                 placeholder="Search documents..."
                 className="pl-8"
-                value={searchTerm}
+                value={searchTerm  ?? ""}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
