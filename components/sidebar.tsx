@@ -49,10 +49,12 @@ export default function Sidebar() {
     { icon: GraduationCap, label: "Training", href: "/training" },
     { icon: Shield, label: "Compliance", href: "/compliance" },
     { icon: FileBarChart, label: "Reports", href: "/reports" },
-    { icon: Users, label: "Team", href: "/team" },
     { icon: UserCircle, label: "Profile", href: "/profile" },
     { icon: Settings, label: "Settings", href: "/settings" },
   ]
+
+  const mainItems = sidebarItems.filter(item => item.label !== "Settings");
+  const settingsItem = sidebarItems.find(item => item.label === "Settings");
 
   const sidebarWidth = collapsed ? "w-16" : "w-64"
 
@@ -110,19 +112,37 @@ export default function Sidebar() {
         </Button>
       </div>
 
-      <nav className="space-y-1">
-        {sidebarItems.map((item, index) => (
-          <Link
-            key={index}
-            href={item.href}
-            className={`flex items-center px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground ${
-              collapsed ? "justify-center" : ""
-            }`}
-          >
-            <item.icon className={`h-5 w-5 ${collapsed ? "" : "mr-3"}`} />
-            {!collapsed && <span>{item.label}</span>}
-          </Link>
-        ))}
+      <nav className="flex flex-col h-full">
+        {/* Top Section */}
+        <div className="space-y-1.5">
+          {mainItems.map((item, index) => (
+            <Link
+              key={index}
+              href={item.href}
+              className={`flex items-center px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground ${
+                collapsed ? "justify-center" : ""
+              }`}
+            >
+              <item.icon className={`h-5 w-5 ${collapsed ? "" : "mr-3"}`} />
+              {!collapsed && <span>{item.label}</span>}
+            </Link>
+          ))}
+        </div>
+        
+        {/* Bottom Section (Fixed Settings) */}
+        {settingsItem && (
+          <div className="border-t border-border pt-4 mt-6">
+            <Link
+              href={settingsItem.href}
+              className={`flex items-center px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground ${
+                collapsed ? "justify-center" : ""
+              }`}
+            >
+              <settingsItem.icon className={`h-5 w-5 ${collapsed ? "" : "mr-3"}`} />
+              {!collapsed && <span>{settingsItem.label}</span>}
+            </Link>
+          </div>
+        )}
       </nav>
     </div>
   )

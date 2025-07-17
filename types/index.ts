@@ -9,3 +9,4 @@ export * from './control';
 export * from './training';
 export * from './company';
 export * from './auditlog';
+export * from './notification';

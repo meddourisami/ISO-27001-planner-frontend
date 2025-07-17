@@ -10,6 +10,7 @@ import nonconformitiesReducer from "@/lib/features/nonconformities/nonconformiti
 import authReducer from "@/lib/features/auth/authSlice"
 import adminReducer from "@/lib/features/admin/adminSlice"
 import auditLogsReducer from "@/lib/features/auditLogs/auditlogsSlice"
+import notificationsReducer from "@/lib/features/notifications/notificationsSlice"
 import { listenerMiddleware } from "./features/listeners/listenerMiddleware"
 
 
@@ -27,6 +28,7 @@ export const store = configureStore({
     assets: assetsReducer,
     training: trainingReducer,
     nonconformities: nonconformitiesReducer,
+    notifications: notificationsReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().prepend(listenerMiddleware.middleware),

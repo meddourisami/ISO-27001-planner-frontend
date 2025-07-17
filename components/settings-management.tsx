@@ -24,7 +24,6 @@ import { Building, Download, FileUp, Mail, Plus, Save, Settings, Trash2, Upload,
 import { BackendUser, User } from "@/types"
 import { deleteMember, editMember, fetchCompanyDetails, fetchCompanyUsers, fetchRoles, listMembers, registerMember, updateCompanyDetails } from "../utils/api"
 import { useToast } from "@/hooks/use-toast"
-import { useAuth } from "@/context/AuthContext";
 import { useSelector } from "react-redux"
 import { RootState } from "@/lib/store"
 
@@ -307,10 +306,9 @@ export default function SettingsManagement() {
   return (
     <div className="space-y-4">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid grid-cols-5 w-full">
+        <TabsList className="grid grid-cols-4 w-full">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
-          <TabsTrigger value="roles">Roles</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="system">System</TabsTrigger>
         </TabsList>

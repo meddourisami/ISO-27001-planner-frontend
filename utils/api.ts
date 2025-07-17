@@ -1,4 +1,4 @@
-import { AssetDto, AuditDto, AuditLog, BackendUser, CompanyDTO, ControlDto, DocumentDto, DocumentVersionDto, EmployeeDto, NonConformityDto, RiskDto, TaskDto, TrainingDto, User } from "@/types";
+import { AssetDto, AuditDto, AuditLog, BackendUser, CompanyDTO, ControlDto, DocumentDto, DocumentVersionDto, EmployeeDto, NonConformityDto, NotificationDto, RiskDto, TaskDto, TrainingDto, User } from "@/types";
 import api from "../lib/axios";
 
 
@@ -446,4 +446,21 @@ export async function fetchAuditLogs(
 
   const res = await api.get('/audit-logs', { params });
   return res.data;
+}
+
+// Notification API endpoints
+
+// Fetch notifications for a user’s companyId
+export async function fetchNotifications(companyId: number): Promise<NotificationDto[]> {
+  return (await api.get(`/notifications/company/${companyId}`)).data;
+}
+
+// Mark all notifications as read for a company
+export async function markAllNotificationsRead(companyId: number): Promise<void> {
+  await api.put(`/notifications/company/${companyId}/mark-all-read`);
+}
+
+// Mark a single notification as read
+export async function markNotificationRead(notificationId: string): Promise<void> {
+  await api.put(`/notifications/${notificationId}/mark-read`);
 }

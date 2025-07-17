@@ -23,7 +23,6 @@ export default function ReportGenerator() {
     "summary",
     "details",
     "charts",
-    "recommendations",
   ])
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedReport, setGeneratedReport] = useState<string | null>(null)
@@ -54,7 +53,6 @@ export default function ReportGenerator() {
       { id: "summary", name: "Executive Summary" },
       { id: "details", name: "Control Details" },
       { id: "charts", name: "Compliance Charts" },
-      { id: "recommendations", name: "Recommendations" },
       { id: "appendix", name: "Appendices" },
     ],
     risk: [
@@ -82,12 +80,10 @@ export default function ReportGenerator() {
       { id: "highlights", name: "Key Highlights" },
       { id: "risks", name: "Key Risks" },
       { id: "progress", name: "Implementation Progress" },
-      { id: "recommendations", name: "Recommendations" },
     ],
     gap: [
       { id: "summary", name: "Gap Analysis Summary" },
       { id: "details", name: "Detailed Gaps" },
-      { id: "recommendations", name: "Recommendations" },
       { id: "timeline", name: "Implementation Timeline" },
     ],
   }

@@ -1,75 +1,31 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AlertTriangle, Calendar, CheckCircle2, Clock, FileText, X } from "lucide-react"
+import { AppDispatch, RootState } from "@/lib/store"
+import { useDispatch, useSelector } from "react-redux"
+import { fetchNotificationsAsync, markAllReadAsync, markReadAsync } from "@/lib/features/notifications/notificationsSlice"
 
 interface NotificationsPanelProps {
   onClose: () => void
 }
 
 export default function NotificationsPanel({ onClose }: NotificationsPanelProps) {
-  const [activeTab, setActiveTab] = useState("all")
+  const dispatch = useDispatch<AppDispatch>();
+  const user = useSelector((state: RootState) => state.auth.user);
+  const notifications = useSelector((state: RootState) => state.notifications.items);
+  const loading = useSelector((state: RootState) => state.notifications.loading);
+  
+  const [activeTab, setActiveTab] = useState<'all'|'alert'|'info'>('all');
 
-  // Mock notifications data
-  const notifications = [
-    {
-      id: "1",
-      type: "risk",
-      title: "High Risk Identified",
-      description: "A new high risk has been identified in the Customer Database Server.",
-      date: "2025-03-19T10:30:00",
-      read: false,
-      category: "alert",
-    },
-    {
-      id: "2",
-      type: "audit",
-      title: "Upcoming Audit",
-      description: "Annual Internal Audit scheduled for April 15, 2025.",
-      date: "2025-03-18T14:45:00",
-      read: true,
-      category: "reminder",
-    },
-    {
-      id: "3",
-      type: "task",
-      title: "Task Due Soon",
-      description: "Implement Multi-Factor Authentication task is due in 3 days.",
-      date: "2025-03-18T09:15:00",
-      read: false,
-      category: "reminder",
-    },
-    {
-      id: "4",
-      type: "document",
-      title: "Document Approval Required",
-      description: "Secure Development Policy requires your approval.",
-      date: "2025-03-17T16:20:00",
-      read: false,
-      category: "action",
-    },
-    {
-      id: "5",
-      type: "compliance",
-      title: "Control Implementation Overdue",
-      description: "A.9.2.3 Management of privileged access rights implementation is overdue.",
-      date: "2025-03-16T11:05:00",
-      read: true,
-      category: "alert",
-    },
-    {
-      id: "6",
-      type: "training",
-      title: "New Training Available",
-      description: "Phishing Awareness Campaign training is now available.",
-      date: "2025-03-15T13:40:00",
-      read: true,
-      category: "info",
-    },
-  ]
+  const handleMarkAll = () => {
+    if (user?.companyId) dispatch(markAllReadAsync(user.companyId));
+  };
+
+  const handleMarkOne = (id: string) => dispatch(markReadAsync(id));
 
   const filteredNotifications = notifications.filter((notification) => {
     if (activeTab === "all") return true
@@ -126,7 +82,7 @@ export default function NotificationsPanel({ onClose }: NotificationsPanelProps)
         </Button>
       </CardHeader>
       <CardContent className="p-0">
-        <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
+        <Tabs defaultValue="all" value={activeTab} onValueChange={(value) => setActiveTab(value as "all" | "alert" | "info")}>
           <TabsList className="grid grid-cols-4 w-full">
             <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="alert">Alerts</TabsTrigger>
@@ -142,6 +98,7 @@ export default function NotificationsPanel({ onClose }: NotificationsPanelProps)
                   <div
                     key={notification.id}
                     className={`p-3 border-b flex items-start gap-3 hover:bg-accent/50 cursor-pointer ${notification.read ? "opacity-70" : ""}`}
+                    onClick={() => !notification.read && handleMarkOne(notification.id)}
                   >
                     <div className="mt-0.5">{getNotificationIcon(notification.type)}</div>
                     <div className="flex-1 min-w-0">
@@ -159,7 +116,7 @@ export default function NotificationsPanel({ onClose }: NotificationsPanelProps)
               )}
             </div>
             <div className="p-2 border-t">
-              <Button variant="ghost" size="sm" className="w-full text-primary">
+              <Button variant="ghost" size="sm" className="w-full text-primary" onClick={handleMarkAll}>
                 Mark all as read
               </Button>
             </div>

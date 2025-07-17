@@ -11,13 +11,14 @@ import { fetchAssets } from "@/lib/features/assets/assetsSlice"
 import { AppDispatch } from "@/lib/store"
 import { useDispatch } from "react-redux"
 import { fetchRisks } from "@/lib/features/risks/risksSlice"
-import { fetchDocumentsAsync, fetchDocumentsPageAsync } from "@/lib/features/documents/documentsSlice"
+import { fetchDocumentsPageAsync } from "@/lib/features/documents/documentsSlice"
 import { fetchAuditsAsync } from "@/lib/features/audits/auditsSlice"
 import { fetchTasksAsync } from "@/lib/features/tasks/tasksSlice"
 import { fetchNonConformitiesAsync } from "@/lib/features/nonconformities/nonconformitiesSlice"
 import { fetchControlsAsync } from "@/lib/features/compliance/complianceSlice"
 import { fetchEmployeesAsync, fetchTrainingsAsync } from "@/lib/features/training/trainingSlice"
 import RoleGuard from "@components/RoleGuard"
+import { fetchNotificationsAsync } from "@/lib/features/notifications/notificationsSlice"
 
 export default function Home() {
   useAuthTokenRefresh()
@@ -74,6 +75,7 @@ export default function Home() {
       dispatch(fetchControlsAsync(user.companyId))
       dispatch(fetchEmployeesAsync(user.companyId))
       dispatch(fetchTrainingsAsync(user.companyId))
+      dispatch(fetchNotificationsAsync(user.companyId))
     }
   }, [dispatch, user?.companyId])
 
