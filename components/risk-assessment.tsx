@@ -71,8 +71,6 @@ export default function RiskAssessment() {
 
   const handleAddRisk = async () => {
   try {
-    console.log("[DEBUG] Starting handleAddRisk", { newRisk, isEditing, user });
-
     if (!user?.companyId) throw new Error("Missing company ID");
 
     const { id, ownerEmail, ...rest } = newRisk;
@@ -82,26 +80,18 @@ export default function RiskAssessment() {
       companyId: user.companyId,
       dueDate: newRisk.dueDate || new Date().toISOString(),
     };
-
-    console.log("[DEBUG] Payload to API:", base);
-
     if (isEditing) {
       const updated = await dispatch(updateRiskAsync({ ...newRisk, companyId: user.companyId })).unwrap();
-      console.log("[DEBUG] Risk updated:", updated);
-
       if (updated.assetId) {
         const result = await dispatch(addRiskToAsset({ assetId: updated.assetId, riskId: updated.id! })).unwrap();
-        console.log("[DEBUG] addRiskToAsset result:", result);
       }
 
       toast({ title: "Risk Updated", description: "Risk saved." });
     } else {
       const created = await dispatch(addRiskAsync(base)).unwrap();
-      console.log("[DEBUG] Risk created:", created);
 
       if (created.assetId) {
         const result = await dispatch(addRiskToAsset({ assetId: created.assetId, riskId: created.id! })).unwrap();
-        console.log("[DEBUG] addRiskToAsset result:", result);
       }
 
       toast({ title: "Risk Added", description: "New risk created." });
@@ -111,7 +101,6 @@ export default function RiskAssessment() {
     setDialogOpen(false);
 
   } catch (error: any) {
-    console.error("[ERROR] handleAddRisk error:", error);
     toast({
       title: "Error",
       description: error.message || "Something went wrong",
@@ -495,7 +484,7 @@ export default function RiskAssessment() {
                           />
                         </div>
                         <div className="col-span-2">
-                          <Label htmlFor="controls">Controls</Label>
+                          <Label htmlFor="controls">Security Measures</Label>
                           <Textarea
                             id="controls"
                             value={newRisk.controls ?? ""}

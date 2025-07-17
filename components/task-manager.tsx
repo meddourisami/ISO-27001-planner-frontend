@@ -75,6 +75,7 @@ export default function TaskManager() {
       const dto: TaskDto = {
         ...newTask,
         id: isEditing ? newTask.id : undefined,
+        assignee: user.email,
         companyId: user.companyId,
       };
     

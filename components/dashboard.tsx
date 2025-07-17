@@ -147,9 +147,9 @@ export default function Dashboard() {
     .sort((a, b) => a.clause.localeCompare(b.clause, undefined, { numeric: true }))
 
 
-    // Recent activities (simulated)
+    // Recent activities
     const recentActivities = auditLogs.slice(0, 5).map((log) => ({
-      title: `${log.actionType} ${log.entityType}`,
+      title: `${log.description} Module:${log.entityType}`,
       time: formatDistanceToNow(new Date(log.timestamp), { addSuffix: true }),
       user: log.actorEmail,
     }));

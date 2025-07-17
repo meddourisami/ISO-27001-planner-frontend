@@ -682,14 +682,11 @@ const onMarkCompleted = async (trainingId: string, employeeId: string, completed
                     filteredTrainings.map((training) => {
                       // Calculate completion rate for this training
                       const requiredEmployees = training.requiredFor.length
-                      console.log(requiredEmployees,"required employees")
                       const completedEmployees = employees.filter((emp) =>
                         emp.completedTrainings.includes(training.title),
                       ).length
-                      console.log(completedEmployees,"completed employees")
                       const completionRate =
                         requiredEmployees > 0 ? Math.round((completedEmployees / requiredEmployees) * 100) : 0
-                      console.log(completionRate, "completion rate")
 
                       return (
                         <TableRow key={training.id} className={selectedTraining === training.id ? "bg-accent" : ""}>

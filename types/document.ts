@@ -10,6 +10,7 @@ export interface DocumentDto {
   approvalDate: string;
   reviewDate: string;
   content: string;
+  relatedControls: string;
   companyId: number;
 }
 

@@ -4,6 +4,7 @@ import { syncControlStatuses } from "@utils/syncControlStatuses";
 import { addNonConformityAsync, updateNonConformityAsync } from "../nonconformities/nonconformitiesSlice";
 import { AppDispatch, RootState } from "@/lib/store";
 import { addAdminUserAsync, fetchAdminsAsync } from "../admin/adminSlice";
+import { approveDocumentAsync, updateDocumentAsync } from "../documents/documentsSlice";
 
 export const listenerMiddleware = createListenerMiddleware();
 
@@ -12,11 +13,14 @@ listenerMiddleware.startListening({
     action.type === updateTaskAsync.fulfilled.type ||
     action.type === addTaskAsync.fulfilled.type ||
     action.type === updateNonConformityAsync.fulfilled.type ||
-    action.type === addNonConformityAsync.fulfilled.type,
+    action.type === addNonConformityAsync.fulfilled.type ||
+    action.type === approveDocumentAsync.fulfilled.type ||
+    action.type === updateDocumentAsync.fulfilled.type,
   
   //TO ADD LATER
     //action.type === deleteNonConformityAsync.fulfilled.type ||
-    //action.type === deleteTaskAsync.fulfilled.type,
+  //action.type === deleteTaskAsync.fulfilled.type ||
+  //action.type === deleteDocumentAsync.fulfilled.type
 
 
   effect: async (_, listenerApi) => {

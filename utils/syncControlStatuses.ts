@@ -14,7 +14,7 @@ export async function syncControlStatuses(
   getState: () => RootState
 ) {
   const state = getState();
-  const { tasks, nonconformities, compliance } = state;
+  const { tasks, nonconformities, documents, compliance } = state;
 
   const controlStatusMap: Record<string, StatusLevel> = {};
 
@@ -41,20 +41,56 @@ export async function syncControlStatuses(
     }
   }
 
-  // 3. Reset outdated controls back to not-implemented
+  // 3. Process documents
+  for (const doc of documents.items) {
+    const docStatus = doc.status?.toLowerCase();
+    let status: StatusLevel | null = null;
+
+    if (docStatus === "approved") {
+      status = "implemented";
+    } else if (docStatus === "review") {
+      status = "planned";
+    } else {
+      continue; // skip drafts or unknown statuses
+    }
+
+    //  Extract clauses like A.8.2, A.8.18 from string
+    const clauseIds = typeof doc.relatedControls === "string"
+      ? doc.relatedControls
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+
+    //  Match against control.title that starts with a clause
+    for (const clause of clauseIds) {
+      const matchedControls = compliance.controls.filter(control =>
+        control.title?.startsWith(clause)
+      );
+
+      for (const ctl of matchedControls) {
+        const curr = controlStatusMap[ctl.id];
+        if (!curr || statusPriority[status] > statusPriority[curr]) {
+          controlStatusMap[ctl.id] = status;
+        }
+      }
+    }
+  }
+
+  // 4. Reset outdated controls back to not-implemented
   for (const ctl of compliance.controls) {
     if (!controlStatusMap.hasOwnProperty(ctl.id) && ctl.status !== "not-implemented") {
       await dispatch(
         updateControlStatusAsync({
           id: ctl.id,
           status: "not-implemented",
-          evidence: "No related tasks or non‑conformities remaining",
+          evidence: "This control is not implemented right now and needs your review",
         })
       );
     }
   }
 
-  // 4. Apply new statuses
+  // 5. Apply new statuses
   for (const [id, status] of Object.entries(controlStatusMap)) {
     const control = compliance.controls.find((c) => c.id === id);
     if (control && control.status !== status) {
@@ -62,7 +98,7 @@ export async function syncControlStatuses(
         updateControlStatusAsync({
           id,
           status,
-          evidence: "Updated via task/non‑conformity change",
+          evidence: "Related modules to this control are implemented",
         })
       );
     }

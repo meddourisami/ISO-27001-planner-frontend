@@ -57,6 +57,7 @@ export default function DocumentManagement() {
     approvalDate: "",
     reviewDate: "",
     content: "",
+    relatedControls: "",
   });
 
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -134,6 +135,7 @@ export default function DocumentManagement() {
       approvalDate: "",
       reviewDate: "",
       content: "",
+      relatedControls: "",
     });
     setFile(null);
     setIsEditing(false);
@@ -153,6 +155,7 @@ export default function DocumentManagement() {
       approvalDate: doc.approvalDate ?? "",
       reviewDate: doc.reviewDate ?? "",
       content: doc.content ?? "",
+      relatedControls: doc.relatedControls ?? "",
     });
     setFile(null);              // clear old file
     setIsEditing(true);
@@ -254,6 +257,7 @@ export default function DocumentManagement() {
 
       return 0
     })
+  console.log(documents[1].relatedControls, "realted controls here")
 
 
 

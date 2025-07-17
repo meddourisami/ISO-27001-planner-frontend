@@ -184,6 +184,7 @@ export default function NonConformitiesManagement() {
     const dto: NonConformityDto = {
       ...newNonConformity,
       id: isEditing ? selectedNonConformity!.trim() : undefined,
+      owner : user.email,
       companyId: user.companyId,
     }
     try {

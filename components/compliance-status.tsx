@@ -24,6 +24,13 @@ export default function ComplianceStatus() {
   const [sortBy, setSortBy] = useState("id")
   const [sortOrder, setSortOrder] = useState("asc")
 
+  const clauseLabels: Record<string, string> = {
+      "A.5": "Organizational measures",
+      "A.6": "Measures related to people",
+      "A.7": "Physical measures",
+      "A.8": "Technological measures",
+    };
+
   useEffect(() => {
   if (user?.companyId) {
     dispatch(fetchControlsAsync(user.companyId));
@@ -208,7 +215,7 @@ export default function ComplianceStatus() {
             {clauseCompliance.map((item) => (
               <Card key={item.clause}>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">{item.clause} Controls</CardTitle>
+                  <CardTitle className="text-sm font-medium">{item.clause} {clauseLabels[item.clause] && `- ${clauseLabels[item.clause]}`}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{item.percentage}%</div>
